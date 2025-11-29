@@ -15,7 +15,7 @@ const defaultMemes: MemeTemplate[] = [
   {
     id: 'distracted_bf',
     name: 'Distracted Boyfriend',
-    imageUrl: '/memes/distracted-boyfriend.jpg',
+    imageUrl: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/memes/distracted-boyfriend.jpg',
     duration: 5,
     frameCount: 3,
     defaultTiming: [0, 1.5, 3],
@@ -23,7 +23,7 @@ const defaultMemes: MemeTemplate[] = [
   {
     id: 'drake',
     name: 'Drake Hotline Bling',
-    imageUrl: '/memes/drake.jpg',
+    imageUrl: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/memes/drake.jpg',
     duration: 4,
     frameCount: 2,
     defaultTiming: [0, 2],
@@ -31,7 +31,7 @@ const defaultMemes: MemeTemplate[] = [
   {
     id: 'change_my_mind',
     name: 'Change My Mind',
-    imageUrl: '/memes/change-my-mind.jpg',
+    imageUrl: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/memes/change-my-mind.jpg',
     duration: 6,
     frameCount: 1,
     defaultTiming: [0],

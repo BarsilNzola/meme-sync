@@ -83,16 +83,42 @@ export async function exportFinalVideo(options: ExportOptions): Promise<ExportRe
     const outputFileName = `export_${projectId}_${quality}.${format}`;
     const outputPath = path.join(tempDir, outputFileName);
     
-    // Download meme image and audio from Supabase URLs to temporary files
-    const memeResponse = await fetch(memeUrl);
+    // Convert relative URLs to absolute URLs for fetch
+    const getAbsoluteUrl = (url: string): string => {
+      if (url.startsWith('http')) {
+        return url; // Already absolute
+      }
+      if (url.startsWith('/')) {
+        // For local development, use the current host
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        return `${baseUrl}${url}`;
+      }
+      return url;
+    };
+
+    const absoluteMemeUrl = getAbsoluteUrl(memeUrl);
+    const absoluteAudioUrl = getAbsoluteUrl(audioUrl);
+    
+    console.log('Downloading from URLs:', { absoluteMemeUrl, absoluteAudioUrl });
+    
+    // Download meme image and audio from URLs to temporary files
+    const memeResponse = await fetch(absoluteMemeUrl);
+    if (!memeResponse.ok) {
+      throw new Error(`Failed to fetch meme: ${memeResponse.statusText}`);
+    }
     const memeBuffer = await memeResponse.arrayBuffer();
     const memePath = path.join(tempDir, `meme_${projectId}.jpg`);
     await fs.writeFile(memePath, Buffer.from(memeBuffer));
     
-    const audioResponse = await fetch(audioUrl);
+    const audioResponse = await fetch(absoluteAudioUrl);
+    if (!audioResponse.ok) {
+      throw new Error(`Failed to fetch audio: ${audioResponse.statusText}`);
+    }
     const audioBuffer = await audioResponse.arrayBuffer();
     const audioPath = path.join(tempDir, `audio_${projectId}.mp3`);
     await fs.writeFile(audioPath, Buffer.from(audioBuffer));
+    
+    console.log('Files downloaded, starting FFmpeg processing...');
     
     // Use your actual server-side FFmpeg to compose the video
     const videoPath = await composeVideoServer({
@@ -100,7 +126,7 @@ export async function exportFinalVideo(options: ExportOptions): Promise<ExportRe
       audioPath: audioPath,   // Use the audio file
       outputPath: outputPath,
       duration: duration,
-      syncPoints: [0],
+      syncPoints: [0], // Start at beginning
       format: format as 'mp4' | 'webm',
       resolution: { width: 640, height: 640 }
     });
@@ -132,7 +158,7 @@ export async function exportFinalVideo(options: ExportOptions): Promise<ExportRe
   } catch (error) {
     console.error('Video export failed:', error);
     
-    // Fallback: Create a placeholder if FFmpeg fails
+    // Fallback: Create a placeholder
     console.log('Using fallback placeholder export');
     const outputFileName = `export_${projectId}_${quality}.${format}`;
     const placeholderContent = `Video Export - ${projectId}\nMeme: ${memeUrl}\nAudio: ${audioUrl}`;
