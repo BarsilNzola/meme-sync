@@ -1,0 +1,6 @@
+node_modules
+.env
+.next
+
+/src/artifacts/@openzeppelin
+/src/artifacts/build-info

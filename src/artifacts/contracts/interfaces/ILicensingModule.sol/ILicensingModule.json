@@ -1,0 +1,62 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "ILicensingModule",
+  "sourceName": "contracts/interfaces/ILicensingModule.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "ipAssetRegistry",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ipAssetId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "licenseTermsId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "attacher",
+          "type": "address"
+        }
+      ],
+      "name": "attachLicenseTerms",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "parentIpAssetId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "childIpAssetId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "licenseTermsId",
+          "type": "uint256"
+        }
+      ],
+      "name": "registerDerivative",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
