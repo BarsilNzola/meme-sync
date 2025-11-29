@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Music, Play, Square, Upload, Volume2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,13 +49,16 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAudioSelect = (audio: AudioTrack) => {
     setSelectedAudio(audio);
     onAudioSelect(audio);
   };
 
-  const handlePlayPause = (audio: AudioTrack) => {
+  const handlePlayPause = (audio: AudioTrack, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event from bubbling to the parent div
+
     if (currentAudio) {
       currentAudio.pause();
       setCurrentAudio(null);
@@ -140,6 +143,10 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
       handleFileUpload(audioFile);
     }
   }, []);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   const handleFileUpload = async (file: File) => {
     if (!file.type.startsWith('audio/')) {
@@ -240,9 +247,9 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
                 }`}
                 onClick={() => handleAudioSelect(audio)}
               >
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 flex-1">
                   <Music className="w-6 h-6 text-primary" />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-foreground font-medium">{audio.name}</div>
                     <div className="flex items-center space-x-2 mt-1">
                       <Badge variant="secondary" className="text-xs">
@@ -257,10 +264,8 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePlayPause(audio);
-                  }}
+                  onClick={(e) => handlePlayPause(audio, e)}
+                  className="ml-4 shrink-0"
                 >
                   {isPlaying && selectedAudio?.id === audio.id ? (
                     <Square className="w-4 h-4" />
@@ -280,6 +285,7 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onClick={handleUploadClick}
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 cursor-pointer ${
               isDragging 
                 ? 'border-primary bg-primary/10' 
@@ -293,18 +299,6 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
             <div className="text-muted-foreground text-sm mb-4">
               or click to browse files (MP3, WAV, etc.)
             </div>
-            <input
-              type="file"
-              accept="audio/*"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleFileUpload(file);
-                }
-              }}
-              disabled={isUploading}
-            />
             {isUploading && (
               <div className="flex items-center justify-center space-x-2 mt-2">
                 <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -312,6 +306,22 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
               </div>
             )}
           </div>
+          {/* Hidden file input - placed outside the upload area */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                handleFileUpload(file);
+                // Reset the input so the same file can be uploaded again
+                e.target.value = '';
+              }
+            }}
+            disabled={isUploading}
+          />
         </div>
 
         {/* AI Audio Generation */}

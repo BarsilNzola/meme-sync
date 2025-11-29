@@ -61,9 +61,9 @@ export default function Home() {
           memeId: selectedMeme.id,
           audioId: selectedAudio.id,
           creator: address,
-          memeImageUrl: selectedMeme.imageUrl, // Ensure this is passed
+          memeImageUrl: selectedMeme.imageUrl,
           memeName: selectedMeme.name,
-          audioUrl: selectedAudio.url, // Ensure this is passed
+          audioUrl: selectedAudio.url,
           audioName: selectedAudio.name,
         }),
       });
@@ -73,7 +73,13 @@ export default function Home() {
       }
       
       const syncResult = await response.json();
-      setCurrentProject(syncResult.project);
+      console.log('Sync result from API:', syncResult);
+      
+      if (syncResult.success && syncResult.project) {
+        setCurrentProject(syncResult.project);
+      } else {
+        throw new Error('Sync completed but no project returned');
+      }
     } catch (error) {
       console.error('Sync failed:', error);
     } finally {

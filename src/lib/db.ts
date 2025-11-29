@@ -45,7 +45,7 @@ export async function createProject(
   if (error) throw error;
   
   return {
-    id: Number(data.id),
+    id: data.id,
     projectName: `${memeName} + ${audioName}`,
     memeId: data.meme_id,
     audioId: data.audio_id,
@@ -70,7 +70,7 @@ export async function getProjectById(id: string): Promise<(SyncProject & { memeI
   
   // Return both the SyncProject and the additional URLs
   return {
-    id: Number(data.id),
+    id: data.id,
     projectName: `${data.meme_name} + ${data.audio_name}`,
     memeId: data.meme_id,
     audioId: data.audio_id,

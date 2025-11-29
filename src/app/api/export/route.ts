@@ -6,30 +6,22 @@ export async function POST(request: NextRequest) {
   try {
     const { projectId, format = 'mp4', quality = 'high' } = await request.json();
 
-    if (!projectId) {
-      return NextResponse.json(
-        { error: 'Project ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get project from database with actual media URLs
     const project = await getProjectById(projectId);
-    
     if (!project) {
-      return NextResponse.json(
-        { error: 'Project not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Use the actual URLs from the database
+    // Pass the actual meme and audio URLs from the project
     const exportResult = await exportFinalVideo({
       projectId: projectId,
       format: format as 'mp4' | 'webm' | 'gif',
       quality: quality as 'low' | 'medium' | 'high',
+      memeUrl: project.memeImageUrl, // From database
+      audioUrl: project.audioUrl,    // From database
+      duration: 15, // You might want to get this from sync data
     });
 
+    // Update project with export URL in database
     await updateProjectExportUrl(projectId, exportResult.downloadUrl);
 
     return NextResponse.json({
@@ -40,9 +32,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Export error:', error);
-    return NextResponse.json(
-      { error: 'Failed to export video' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to export video' }, { status: 500 });
   }
 }

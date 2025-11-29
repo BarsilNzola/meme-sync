@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
       syncPoints 
     } = await request.json();
 
+    console.log('Sync request received:', { memeId, audioId, creator, memeImageUrl, audioUrl });
+
     if (!memeId || !audioId || !creator || !memeImageUrl || !audioUrl) {
       return NextResponse.json(
         { error: 'Meme ID, Audio ID, Creator, Meme Image URL, and Audio URL are required' },
@@ -24,22 +26,24 @@ export async function POST(request: NextRequest) {
 
     // Sync meme with audio using our video tools
     const syncResult = await syncMemeWithAudio({
-      memeId,
-      audioId,
+      memeId: memeId.toString(),
+      audioId: audioId.toString(),
       syncPoints: syncPoints || []
     });
 
-    // Store project in database with REAL URLs
+    console.log('Sync result:', syncResult);
+
+    // Store project in database
     const project = await createProject(
       memeId,
       memeName || 'Custom Meme',
-      memeImageUrl, // Real meme URL
+      memeImageUrl,
       5, // memeDuration
       1, // memeFrameCount
       [0], // memeDefaultTiming
-      audioId, 
+      audioId,
       audioName || 'Custom Audio',
-      audioUrl, // Real audio URL
+      audioUrl,
       15, // audioDuration
       120, // audioBpm
       [], // audioBeats
@@ -47,6 +51,8 @@ export async function POST(request: NextRequest) {
       creator,
       syncResult.syncData.beatMatches.map((match: any) => match.timestamp)
     );
+
+    console.log('Created project:', project);
 
     return NextResponse.json({
       success: true,
