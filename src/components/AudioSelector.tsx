@@ -15,7 +15,7 @@ const defaultAudioTracks: AudioTrack[] = [
   {
     id: 'beat_1',
     name: 'Synthwave Beat',
-    url: '/audio/synthwave.mp3',
+    url: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/audio/synthwave.mp3',
     duration: 15,
     bpm: 128,
     beats: [0, 0.46875, 0.9375, 1.40625, 1.875],
@@ -24,7 +24,7 @@ const defaultAudioTracks: AudioTrack[] = [
   {
     id: 'beat_2',
     name: 'Hip Hop Loop',
-    url: '/audio/hiphop.mp3',
+    url: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/audio/hiphop.mp3',
     duration: 12,
     bpm: 95,
     beats: [0, 0.63158, 1.26316, 1.89474, 2.52632],
@@ -33,7 +33,7 @@ const defaultAudioTracks: AudioTrack[] = [
   {
     id: 'beat_3',
     name: 'Electronic Pulse',
-    url: '/audio/electronic.mp3',
+    url: 'https://uatxiqonhdguqcqqlisl.supabase.co/storage/v1/object/public/audio/electronic.mp3',
     duration: 10,
     bpm: 140,
     beats: [0, 0.42857, 0.85714, 1.28571, 1.71429],
