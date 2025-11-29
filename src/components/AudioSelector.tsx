@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Music, Play, Square } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Music, Play, Square, Upload, Volume2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AudioTrack } from '@/types/Audio';
+import { uploadAudio } from '@/lib/storage';
 
 interface AudioSelectorProps {
   onAudioSelect: (audio: AudioTrack) => void;
@@ -46,6 +47,8 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleAudioSelect = (audio: AudioTrack) => {
     setSelectedAudio(audio);
@@ -95,7 +98,6 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
       const result = await response.json();
       
       if (result.success) {
-        // Create a new AudioTrack from the result
         const newAudioTrack: AudioTrack = {
           id: `generated_${Date.now()}`,
           name: `AI ${mood} Track`,
@@ -112,13 +114,86 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
       }
     } catch (error) {
       console.error('Failed to generate audio:', error);
-      // You might want to show a toast notification here
     } finally {
       setIsGenerating(null);
     }
   };
 
-  // Helper function to get appropriate tempo for mood
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const audioFile = files.find(file => file.type.startsWith('audio/'));
+    
+    if (audioFile) {
+      handleFileUpload(audioFile);
+    }
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.type.startsWith('audio/')) {
+      alert('Please upload an audio file (MP3, WAV, etc.)');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // Upload to Supabase Storage
+      const audioUrl = await uploadAudio(file);
+      
+      // Create a temporary audio element to get duration
+      const tempAudio = new Audio();
+      tempAudio.src = URL.createObjectURL(file);
+      
+      tempAudio.onloadedmetadata = () => {
+        const customAudio: AudioTrack = {
+          id: `custom_${Date.now()}`,
+          name: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+          url: audioUrl,
+          duration: Math.round(tempAudio.duration),
+          bpm: 120, // Default BPM - you could analyze this later
+          beats: generatePlaceholderBeats(Math.round(tempAudio.duration), 120),
+          format: file.name.split('.').pop() as 'mp3' | 'wav',
+        };
+        
+        handleAudioSelect(customAudio);
+        setIsUploading(false);
+      };
+      
+      tempAudio.onerror = () => {
+        // Fallback if we can't get duration
+        const customAudio: AudioTrack = {
+          id: `custom_${Date.now()}`,
+          name: file.name.replace(/\.[^/.]+$/, ""),
+          url: audioUrl,
+          duration: 15, // Default duration
+          bpm: 120,
+          beats: generatePlaceholderBeats(15, 120),
+          format: file.name.split('.').pop() as 'mp3' | 'wav',
+        };
+        
+        handleAudioSelect(customAudio);
+        setIsUploading(false);
+      };
+      
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload audio file. Please try again.');
+      setIsUploading(false);
+    }
+  };
+
   const getTempoForMood = (mood: string): number => {
     const tempoMap: { [key: string]: number } = {
       'epic': 120,
@@ -131,7 +206,6 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
     return tempoMap[mood.toLowerCase()] || 120;
   };
 
-  // Helper function to generate placeholder beats
   const generatePlaceholderBeats = (duration: number, bpm: number): number[] => {
     const beats: number[] = [];
     const beatInterval = 60 / bpm;
@@ -148,7 +222,7 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-foreground">Select Audio Track</CardTitle>
         <CardDescription className="text-muted-foreground">
-          Choose from existing tracks or generate AI audio based on mood
+          Choose from existing tracks, upload your own, or generate AI audio
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -196,6 +270,47 @@ export default function AudioSelector({ onAudioSelect }: AudioSelectorProps) {
                 </Button>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Upload Audio Section */}
+        <div className="border-t border-border pt-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">Upload Your Audio</h3>
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 cursor-pointer ${
+              isDragging 
+                ? 'border-primary bg-primary/10' 
+                : 'border-border hover:border-primary/50'
+            } ${isUploading ? 'opacity-50' : ''}`}
+          >
+            <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <div className="text-foreground font-medium mb-2">
+              {isUploading ? 'Uploading...' : 'Drag & drop your audio file'}
+            </div>
+            <div className="text-muted-foreground text-sm mb-4">
+              or click to browse files (MP3, WAV, etc.)
+            </div>
+            <input
+              type="file"
+              accept="audio/*"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleFileUpload(file);
+                }
+              }}
+              disabled={isUploading}
+            />
+            {isUploading && (
+              <div className="flex items-center justify-center space-x-2 mt-2">
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-muted-foreground">Uploading...</span>
+              </div>
+            )}
           </div>
         </div>
 

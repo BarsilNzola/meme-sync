@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 // Upload meme image
 export async function uploadMeme(file: File): Promise<string> {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random()}.${fileExt}`;
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
   
   const { data, error } = await supabase.storage
     .from('memes')
@@ -21,7 +21,7 @@ export async function uploadMeme(file: File): Promise<string> {
 // Upload audio file
 export async function uploadAudio(file: File): Promise<string> {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random()}.${fileExt}`;
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
   
   const { data, error } = await supabase.storage
     .from('audio')
