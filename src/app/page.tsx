@@ -109,6 +109,10 @@ export default function Home() {
     return selectedMeme.imageUrl;
   };
 
+  const handleProjectUpdate = (updatedProject: ProjectWithMedia) => {
+    setCurrentProject(updatedProject);
+  };
+
   if (!isConnected) {
     return (
       <main className="min-h-screen p-8">
@@ -276,7 +280,10 @@ export default function Home() {
 
                 <Card className="bg-background/50 backdrop-blur-sm border-border/50">
                   <CardContent className="flex justify-between items-center pt-6">
-                    <ExportButton project={currentProject} />
+                    <ExportButton 
+                        project={currentProject} 
+                        onExportComplete={handleProjectUpdate} 
+                    />
                     <IPRegistrationBadge project={currentProject} />
                   </CardContent>
                 </Card>

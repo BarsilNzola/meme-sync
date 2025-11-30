@@ -15,6 +15,7 @@ interface ProjectWithMedia extends SyncProject {
 
 interface ExportButtonProps {
   project: ProjectWithMedia; // Use the extended type
+  onExportComplete?: (updatedProject: ProjectWithMedia) => void;
 }
 
 type ExportStep = 
@@ -26,7 +27,7 @@ type ExportStep =
   | 'completed'
   | 'error';
 
-export default function ExportButton({ project }: ExportButtonProps) {
+export default function ExportButton({ project, onExportComplete }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [isExported, setIsExported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,11 +126,21 @@ export default function ExportButton({ project }: ExportButtonProps) {
         }),
       });
       
-      if (!updateResponse.ok) {
+      if (updateResponse.ok) {
+        const updatedProject = await updateResponse.json();
+        addProgressLog('Project updated successfully');
+        
+        // Call the callback with the updated project
+        if (onExportComplete) {
+          onExportComplete({
+            ...updatedProject,
+            memeImageUrl: project.memeImageUrl,
+            audioUrl: project.audioUrl
+          });
+        }
+      } else {
         console.warn('Failed to update project export URL, but video was generated');
         addProgressLog('Project updated with minor warnings');
-      } else {
-        addProgressLog('Project updated successfully');
       }
       
       setCurrentStep('completed');
