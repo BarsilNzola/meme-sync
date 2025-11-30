@@ -1,5 +1,5 @@
 import { StoryClient, IpMetadata, PILFlavor, WIP_TOKEN_ADDRESS } from '@story-protocol/core-sdk';
-import { parseEther } from 'viem';
+import { toHex, zeroAddress, http } from 'viem';
 
 interface IPRegistrationOptions {
   projectId: string;
@@ -15,40 +15,76 @@ interface RegistrationResult {
   ipAssetId: string;
   txHash: string;
   licenseTermsIds: string[];
+  spgNftContract?: string;
 }
 
-const SPG_NFT_CONTRACT_ADDRESS = '0xc32A8a0FF3beDDDa58393d022aF433e78739FAbc' as `0x${string}`;
+// Contract addresses from Story Protocol Aeneid testnet
+const ROYALTY_POLICY_LAP = '0xBe54FB168b3c982b7AaE60dB6CF75Bd8447b390E' as `0x${string}`;
+
+// We'll create our own SPG NFT collection
+let memesyncNFTContract: string | null = null;
 
 export async function registerIPAsset(options: IPRegistrationOptions): Promise<RegistrationResult> {
   const { projectId, projectName, memeId, outputUri, metadataUri, walletClient } = options;
 
   try {
+    console.log('Initializing Story Protocol client for Aeneid testnet...');
+
+    // Simple client initialization
     const client = StoryClient.newClient({
       account: walletClient.account,
-      transport: walletClient.transport,
+      transport: http('https://aeneid.storyrpc.io'),
       chainId: 'aeneid',
-    });
+    } as any);
 
-    const imageHash = `0x${await generateHash(memeId)}` as `0x${string}`;
-    const mediaHash = `0x${await generateHash(outputUri)}` as `0x${string}`;
+    console.log('Story Protocol client initialized successfully');
 
-    const ipMetadata: IpMetadata = client.ipAsset.generateIpMetadata({
-      title: projectName,
+    // Create or get our MemeSync SPG NFT collection
+    let spgNftContract: string | null = memesyncNFTContract;
+    if (!spgNftContract) {
+      console.log('Creating MemeSync SPG NFT collection...');
+      
+      // Use EXACTLY the parameters from the working documentation
+      const newCollection = await client.nftClient.createNFTCollection({
+        name: "MemeSync Creations",
+        symbol: "MSYNC", 
+        isPublicMinting: true,
+        mintOpen: true,
+        mintFeeRecipient: zeroAddress,
+        contractURI: "",
+      });
+
+      if (!newCollection.spgNftContract) {
+        throw new Error('Failed to create SPG NFT collection - no contract address returned');
+      }
+      
+      spgNftContract = newCollection.spgNftContract;
+      memesyncNFTContract = spgNftContract;
+      
+      console.log('New collection created:', {
+        'SPG NFT Contract Address': newCollection.spgNftContract,
+        'Transaction Hash': newCollection.txHash,
+      });
+    } else {
+      console.log('Using existing MemeSync SPG NFT collection:', spgNftContract);
+    }
+
+    // Generate metadata (rest of your existing code remains the same)
+    const ipMetadata = {
+      title: projectId,
       description: `MemeSync creation: ${projectName}`,
+      image: memeId,
+      mediaUrl: outputUri,
+      mediaType: 'video/mp4',
       createdAt: Math.floor(Date.now() / 1000).toString(),
       creators: [
         {
           name: 'MemeSync Creator',
-          address: walletClient.account.address as `0x${string}`,
+          address: walletClient.account.address,
           contributionPercent: 100,
         },
       ],
-      image: memeId,
-      imageHash: imageHash,
-      mediaUrl: outputUri,
-      mediaHash: mediaHash,
-      mediaType: 'video/mp4',
-    });
+    };
 
     const nftMetadata = {
       name: `MemeSync: ${projectName}`,
@@ -61,7 +97,7 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
           value: projectId,
         },
         {
-          trait_type: 'Media Type',
+          trait_type: 'Media Type', 
           value: 'Meme with Audio',
         },
         {
@@ -72,50 +108,81 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
           trait_type: 'Source',
           value: 'MemeSync',
         },
+        {
+          trait_type: 'Collection',
+          value: 'MemeSync Creations',
+        },
       ],
     };
 
+    console.log('Uploading metadata to IPFS...');
+
+    // Upload metadata to IPFS
     const ipIpfsHash = await uploadMetadataToIPFS(ipMetadata);
     const nftIpfsHash = await uploadMetadataToIPFS(nftMetadata);
     
-    const ipHash = `0x${await generateHash(JSON.stringify(ipMetadata))}` as `0x${string}`;
-    const nftHash = `0x${await generateHash(JSON.stringify(nftMetadata))}` as `0x${string}`;
+    // Generate hashes
+    const ipMetadataHash = await generateHash(JSON.stringify(ipMetadata));
+    const nftMetadataHash = await generateHash(JSON.stringify(nftMetadata));
 
+    console.log('Metadata uploaded to IPFS:', { ipIpfsHash, nftIpfsHash });
+
+    console.log('Registering IP asset with Story Protocol...');
+
+    // Register the IP asset using our custom SPG NFT collection
     const response = await client.ipAsset.registerIpAsset({
       nft: { 
         type: 'mint' as const, 
-        spgNftContract: SPG_NFT_CONTRACT_ADDRESS 
+        spgNftContract: spgNftContract as `0x${string}`
       },
       licenseTermsData: [
         {
-          terms: PILFlavor.commercialRemix({
-            commercialRevShare: 10,
-            defaultMintingFee: parseEther('0.1'),
+          terms: PILFlavor.creativeCommonsAttribution({
             currency: WIP_TOKEN_ADDRESS,
+            royaltyPolicy: ROYALTY_POLICY_LAP,
           }),
+        },
+        {
+          terms: PILFlavor.commercialRemix({
+            commercialRevShare: 20,
+            defaultMintingFee: BigInt(10000),
+            currency: WIP_TOKEN_ADDRESS,
+            royaltyPolicy: ROYALTY_POLICY_LAP,
+          }),
+          maxLicenseTokens: 100,
+        },
+      ],
+      royaltyShares: [
+        {
+          recipient: walletClient.account.address as `0x${string}`,
+          percentage: 10,
         },
       ],
       ipMetadata: {
         ipMetadataURI: `https://ipfs.io/ipfs/${ipIpfsHash}`,
-        ipMetadataHash: ipHash,
+        ipMetadataHash: toHex(ipMetadataHash, { size: 32 }),
         nftMetadataURI: `https://ipfs.io/ipfs/${nftIpfsHash}`,
-        nftMetadataHash: nftHash,
+        nftMetadataHash: toHex(nftMetadataHash, { size: 32 }),
       },
     });
 
     console.log('IP Asset created on Aeneid:', {
       'Transaction Hash': response.txHash,
       'IPA ID': response.ipId,
-      'License Terms IDs': response.licenseTermsIds,
+      'SPG NFT Contract': spgNftContract
     });
 
-    const licenseTermsIds = response.licenseTermsIds?.map(id => id.toString()) || [];
+    // Handle the response structure properly
+    const licenseTermsIds = 'licenseTermsIds' in response 
+      ? (response as any).licenseTermsIds?.map((id: any) => id.toString()) || []
+      : [];
 
     return {
       success: true,
       ipAssetId: response.ipId!,
       txHash: response.txHash!,
-      licenseTermsIds: licenseTermsIds,
+      licenseTermsIds,
+      spgNftContract: spgNftContract!,
     };
 
   } catch (error: any) {
@@ -125,10 +192,8 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
       throw new Error('Transaction was rejected by your wallet');
     } else if (error.message?.includes('insufficient funds')) {
       throw new Error('Insufficient funds for transaction');
-    } else if (error.message?.includes('network')) {
-      throw new Error('Network error. Please check your connection');
-    } else if (error.message?.includes('already registered')) {
-      throw new Error('This content is already registered');
+    } else if (error.message?.includes('unknown account')) {
+      throw new Error('Wallet connection issue. Please ensure your wallet is properly connected and you\'re on the correct network.');
     } else {
       throw new Error(`Registration failed: ${error.message || 'Unknown error'}`);
     }
@@ -145,7 +210,7 @@ async function generateHash(data: string): Promise<string> {
 
 async function uploadMetadataToIPFS(metadata: any): Promise<string> {
   try {
-    const response = await fetch('/api/ipfs/upload', {
+    const response = await fetch('/api/upload', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,71 +224,9 @@ async function uploadMetadataToIPFS(metadata: any): Promise<string> {
     }
 
     const result = await response.json();
-    return result.ipfsUri.replace('ipfs://', '');
+    return result.ipfsUri;
   } catch (error) {
     console.error('IPFS upload error:', error);
     throw new Error('Failed to upload metadata to IPFS');
-  }
-}
-
-export async function transferIPAssetViaNFT(ipAssetId: string, toAddress: string, walletClient: any) {
-  try {
-    console.warn('Direct IP Asset transfer not available in current SDK. Consider transferring the underlying NFT instead.');
-    throw new Error('IP Asset transfer functionality not implemented in current SDK version');
-  } catch (error) {
-    console.error('Error transferring IP asset:', error);
-    throw error;
-  }
-}
-
-export async function getIPAssetDetailsViaAPI(ipAssetId: string) {
-  try {
-    const response = await fetch('https://api.story.foundation/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query GetIPAsset($ipId: String!) {
-            ipAsset(ipId: $ipId) {
-              id
-              owner
-              createdAt
-            }
-          }
-        `,
-        variables: {
-          ipId: ipAssetId
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch IP asset details');
-    }
-
-    const result = await response.json();
-    return result.data.ipAsset;
-  } catch (error) {
-    console.error('Error fetching IP asset details:', error);
-    throw error;
-  }
-}
-
-export async function getIPAssetDetailsIfAvailable(ipAssetId: string, walletClient: any) {
-  try {
-    const client = StoryClient.newClient({
-      account: walletClient.account,
-      transport: walletClient.transport,
-      chainId: 'aeneid',
-    });
-
-    console.log('Available IP asset methods:', Object.keys(client.ipAsset));
-    
-    throw new Error('IP Asset details retrieval not available in current SDK. Use GraphQL API instead.');
-  } catch (error) {
-    console.error('Error fetching IP asset details:', error);
-    throw error;
   }
 }

@@ -86,16 +86,35 @@ export async function getProjectById(id: string): Promise<(SyncProject & { memeI
   };
 }
 
-export async function updateProjectExportUrl(projectId: string, exportUrl: string): Promise<void> {
-  const { error } = await supabase
+export async function updateProjectExportUrl(projectId: string, exportUrl: string): Promise<SyncProject & { memeImageUrl: string; audioUrl: string }> {
+  const { data, error } = await supabase
     .from('projects')
     .update({ 
       export_url: exportUrl,
       status: 'Exported'
     })
-    .eq('id', projectId);
+    .eq('id', projectId)
+    .select()
+    .single();
 
   if (error) throw error;
+  
+  // Return the updated project in the same format as getProjectById
+  return {
+    id: data.id,
+    projectName: `${data.meme_name} + ${data.audio_name}`,
+    memeId: data.meme_id,
+    audioId: data.audio_id,
+    creator: data.user_address,
+    syncPoints: data.sync_points,
+    outputUri: data.export_url || '',
+    ipAssetHash: data.ip_registration_tx || '',
+    status: data.status as ProjectStatus,
+    createdAt: new Date(data.created_at).getTime(),
+    updatedAt: Date.now(),
+    memeImageUrl: data.meme_image_url,
+    audioUrl: data.audio_url,
+  };
 }
 
 export async function updateProjectIPRegistration(projectId: string, ipAssetHash: string): Promise<void> {

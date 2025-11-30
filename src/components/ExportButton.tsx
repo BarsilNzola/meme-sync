@@ -147,14 +147,19 @@ export default function ExportButton({ project, onExportComplete }: ExportButton
       setIsExported(true);
       addProgressLog('Export completed! Starting download...');
       
-      // Trigger download
+      // Create a proper download from the blob instead of using the Supabase URL
+      // This ensures the file downloads instead of opening in a new tab
+      const url = URL.createObjectURL(videoBlob);
       const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = outputFileName;
+      link.href = url;
+      link.download = `memesync-${project.projectName.replace(/\s+/g, '-').toLowerCase()}.mp4`;
       
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the object URL
+      setTimeout(() => URL.revokeObjectURL(url), 100);
       
       addProgressLog('Download initiated successfully');
       console.log('Download initiated');

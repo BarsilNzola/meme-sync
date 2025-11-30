@@ -1,21 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, CheckCircle, XCircle, ExternalLink, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAccount, useWalletClient, useContractWrite, useWaitForTransaction } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 import { SyncProject } from '@/types/Project';
 import { useToast } from '@/hooks/use-toast';
 import { registerIPAsset } from '@/lib/story-sdk';
-import MemeSyncArtifact from '@/artifacts/contracts/MemeSync.sol/MemeSync.json';
+import { updateProjectIPRegistration } from '@/lib/db';
 
-interface IPRegistrationBadgeProps {
-  project: SyncProject;
+interface ProjectWithMedia extends SyncProject {
+  memeImageUrl: string;
+  audioUrl: string;
 }
 
-const memesyncABI = MemeSyncArtifact.abi;
+interface IPRegistrationBadgeProps {
+  project: ProjectWithMedia;
+}
 
 export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProps) {
   const { address } = useAccount();
@@ -25,48 +28,13 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
   const [error, setError] = useState<string | null>(null);
   const [ipAssetId, setIpAssetId] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [ipAssetHash, setIpAssetHash] = useState<string | null>(null);
 
-  // Contract write for prepareIPAsset
-  const { write: prepareIPAsset, data: prepareData, isLoading: isPreparing } = useContractWrite({
-    address: process.env.NEXT_PUBLIC_MEMESYNC_CONTRACT_ADDRESS as `0x${string}`,
-    abi: memesyncABI,
-    functionName: 'prepareIPAsset',
-    onSuccess: (data) => {
-      toast({
-        title: 'IP Asset Prepared',
-        description: 'Your asset has been prepared on-chain.',
-      });
-    },
-    onError: (error) => {
-      setIsRegistering(false);
-      setError(error.message);
-      toast({
-        title: 'Preparation Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Wait for prepareIPAsset transaction
-  const { isLoading: isPreparingConfirming } = useWaitForTransaction({
-    hash: prepareData?.hash,
-    onSuccess: async (data) => {
-      try {
-        // Extract IP Asset Hash from transaction logs
-        const hash = extractIPAssetHash(data);
-        if (hash) {
-          setIpAssetHash(hash);
-          // Now register with Story Protocol
-          await registerWithStoryProtocol();
-        }
-      } catch (error) {
-        setError('Failed to extract IP asset hash');
-        setIsRegistering(false);
-      }
-    },
-  });
+  // Debug logging
+  useEffect(() => {
+    console.log('IPRegistrationBadge - Project:', project);
+    console.log('IPRegistrationBadge - outputUri:', project.outputUri);
+    console.log('IPRegistrationBadge - Can register:', !!project.outputUri);
+  }, [project]);
 
   const handleRegister = async () => {
     if (!address || !walletClient) {
@@ -91,8 +59,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       const metadata = {
         name: project.projectName,
         description: `MemeSync creation: ${project.projectName}`,
-        image: `ipfs://${project.memeId}`,
-        audio: `ipfs://${project.audioId}`,
+        image: project.memeImageUrl,
+        audio: project.audioUrl,
         animation_url: project.outputUri,
         attributes: [
           {
@@ -113,7 +81,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
           },
           {
             trait_type: "Project ID",
-            value: project.id.toString()
+            value: project.id.toString() // Convert to string
           }
         ],
         external_url: "https://memesync.xyz",
@@ -127,42 +95,22 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
       // Upload metadata to IPFS
       toast({
-        title: 'Uploading metadata...',
-        description: 'Storing metadata on IPFS.',
+        title: 'Uploading Metadata',
+        description: 'Preparing metadata for IPFS storage...',
       });
 
       const metadataUri = await uploadMetadataToIPFS(metadata);
 
-      // Call our contract's prepareIPAsset function
+      // Register directly with Story Protocol
       toast({
-        title: 'Preparing IP Asset...',
-        description: 'Creating IP asset hash on-chain.',
+        title: 'Registering IP Asset',
+        description: 'Creating your IP asset on Story Protocol...',
       });
 
-      prepareIPAsset({
-        args: [BigInt(project.id), metadataUri],
-      });
-
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Registration failed');
-      toast({
-        title: 'Registration Failed',
-        description: 'Failed to prepare IP asset.',
-        variant: 'destructive',
-      });
-      setIsRegistering(false);
-    }
-  };
-
-  const registerWithStoryProtocol = async () => {
-    try {
-      if (!walletClient || !ipAssetHash) {
-        throw new Error('Missing required data for Story Protocol registration');
-      }
-
-      toast({
-        title: 'Registering with Story Protocol...',
-        description: 'Finalizing IP asset registration.',
+      console.log('Starting Story Protocol registration...', {
+        projectId: project.id,
+        outputUri: project.outputUri,
+        metadataUri
       });
 
       const registrationResult = await registerIPAsset({
@@ -170,9 +118,20 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
         projectName: project.projectName,
         memeId: project.memeId.toString(),
         outputUri: project.outputUri,
-        metadataUri: `ipfs://${ipAssetHash}`, // Use the hash from our contract
+        metadataUri: metadataUri,
         walletClient,
       });
+
+      console.log('Story Protocol registration successful:', registrationResult);
+
+      // Update project in database with IP registration details
+      try {
+        // Convert project.id to string to match the function signature
+        await updateProjectIPRegistration(project.id.toString(), registrationResult.txHash);
+        console.log('Project updated in database with IP registration');
+      } catch (dbError) {
+        console.warn('Failed to update project in database, but IP registration was successful:', dbError);
+      }
 
       setIpAssetId(registrationResult.ipAssetId);
       setTxHash(registrationResult.txHash);
@@ -183,10 +142,12 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       });
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Story Protocol registration failed');
+      console.error('IP registration failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      setError(errorMessage);
       toast({
         title: 'Registration Failed',
-        description: 'Failed to register with Story Protocol.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -196,7 +157,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
   const uploadMetadataToIPFS = async (metadata: any): Promise<string> => {
     try {
-      const response = await fetch('/api/ipfs/upload', {
+      const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,38 +166,49 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload to IPFS');
+        const errorText = await response.text();
+        console.error('IPFS upload failed:', errorText);
+        throw new Error(`IPFS upload failed: ${response.status} ${response.statusText}`);
       }
 
       const result = await response.json();
       return result.ipfsUri;
     } catch (error) {
       console.error('IPFS upload error:', error);
+      
+      // In development, return a mock URI instead of failing completely
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Using fallback mock IPFS URI due to upload error');
+        return `ipfs://mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+      
       throw new Error('Failed to upload metadata to IPFS');
     }
   };
 
-  const extractIPAssetHash = (data: any): string | null => {
-    // Implement logic to extract IPAssetHash from transaction logs
-    // This would parse the IPAssetPrepared event
+  // Add a refresh button to manually check the project status
+  const handleRefreshProject = async () => {
     try {
-      // Placeholder - implement actual log parsing
-      return `0x${Math.random().toString(16).substr(2)}`;
+      const response = await fetch(`/api/projects/${project.id}`);
+      if (response.ok) {
+        const updatedProject = await response.json();
+        toast({
+          title: 'Project Refreshed',
+          description: 'Project data has been updated.',
+        });
+        console.log('Refreshed project:', updatedProject);
+      }
     } catch (error) {
-      console.error('Error extracting IP asset hash:', error);
-      return null;
+      console.error('Failed to refresh project:', error);
     }
   };
 
-  const isLoading = isRegistering || isPreparing || isPreparingConfirming;
-
   if (ipAssetId) {
     return (
-      <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-foreground">IP Asset Registered</CardTitle>
-          <CardDescription className="text-muted-foreground">
+      <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xl md:text-2xl font-bold text-foreground">IP Asset Registered</CardTitle>
+          <CardDescription className="text-muted-foreground text-sm md:text-base">
             Your meme has been successfully registered on Story Protocol
           </CardDescription>
         </CardHeader>
@@ -246,32 +218,32 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
             <span className="font-medium">Registered on Story Protocol</span>
           </div>
           
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="break-all">
               <div className="text-muted-foreground">Asset ID</div>
-              <div className="font-mono text-sm">{ipAssetId}</div>
+              <div className="font-mono text-xs md:text-sm truncate">{ipAssetId}</div>
             </div>
-            <div>
+            <div className="break-all">
               <div className="text-muted-foreground">Transaction</div>
-              <div className="font-mono text-sm truncate">{txHash}</div>
+              <div className="font-mono text-xs md:text-sm truncate">{txHash}</div>
             </div>
           </div>
 
-          <div className="flex space-x-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => window.open(`https://testnet.storyprotocol.xyz/ipa/${ipAssetId}`, '_blank')}
-              className="gap-2"
+              className="gap-2 flex-1 justify-center"
             >
               <ExternalLink className="w-4 h-4" />
-              View on Story Protocol
+              View on Story
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => window.open(`https://sepolia.etherscan.io/tx/${txHash}`, '_blank')}
-              className="gap-2"
+              className="gap-2 flex-1 justify-center"
             >
               <ExternalLink className="w-4 h-4" />
               View on Etherscan
@@ -284,32 +256,42 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
   if (error) {
     return (
-      <Card className="bg-background/50 backdrop-blur-sm border-border/50">
+      <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
         <CardContent className="pt-6">
           <div className="flex items-center space-x-2 text-red-400">
             <XCircle className="w-5 h-5" />
             <span className="font-medium">Registration Failed</span>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">{error}</p>
-          <Button
-            onClick={handleRegister}
-            disabled={isLoading}
-            className="mt-4 gap-2"
-            variant="outline"
-          >
-            <Shield className="w-4 h-4" />
-            Try Again
-          </Button>
+          <p className="text-sm text-muted-foreground mt-2 break-words">{error}</p>
+          <div className="flex flex-col sm:flex-row gap-2 mt-4">
+            <Button
+              onClick={handleRegister}
+              disabled={isRegistering}
+              className="gap-2 flex-1 justify-center"
+              variant="outline"
+            >
+              <Shield className="w-4 h-4" />
+              Try Again
+            </Button>
+            <Button
+              onClick={handleRefreshProject}
+              variant="outline"
+              size="sm"
+              className="flex-1 justify-center"
+            >
+              Refresh Project
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-foreground">Register IP Asset</CardTitle>
-        <CardDescription className="text-muted-foreground">
+    <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-xl md:text-2xl font-bold text-foreground">Register IP Asset</CardTitle>
+        <CardDescription className="text-muted-foreground text-sm md:text-base">
           Register your meme creation as an IP asset on Story Protocol to protect your work
         </CardDescription>
       </CardHeader>
@@ -317,43 +299,65 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
         <div className="flex items-center space-x-2">
           <Shield className="w-5 h-5 text-primary" />
           <span className="font-medium">Story Protocol Registration</span>
-          <Badge variant="secondary">On-Chain</Badge>
+          <Badge variant="secondary" className="hidden sm:inline">On-Chain</Badge>
         </div>
 
         <div className="space-y-2 text-sm text-muted-foreground">
-          <p>• Register your meme as a unique IP asset</p>
-          <p>• Set royalties for future usage</p>
-          <p>• Protect your creative work on-chain</p>
-          <p>• License your content to others</p>
+          <p className="break-words">• Register your meme as a unique IP asset</p>
+          <p className="break-words">• Set royalties for future usage</p>
+          <p className="break-words">• Protect your creative work on-chain</p>
+          <p className="break-words">• License your content to others</p>
         </div>
+
+        {/* Debug Info - Only show in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+            <div className="font-semibold text-yellow-800">Debug Info:</div>
+            <div className="break-all">Project ID: {project.id}</div>
+            <div className="break-all">Output URI: {project.outputUri || 'Not set'}</div>
+            <div>Status: {project.status}</div>
+          </div>
+        )}
 
         <Button
           onClick={handleRegister}
-          disabled={isLoading || !project.outputUri}
+          disabled={isRegistering || !project.outputUri}
           className="w-full gap-2 bg-purple-600 hover:bg-purple-700"
           size="lg"
         >
-          {isLoading ? (
+          {isRegistering ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {isPreparing ? 'Preparing...' : 'Registering...'}
+              <span className="hidden sm:inline">Registering...</span>
+              <span className="sm:hidden">Registering</span>
             </>
           ) : (
             <>
               <Shield className="w-4 h-4" />
-              Register on Story Protocol
+              <span className="hidden sm:inline">Register on Story Protocol</span>
+              <span className="sm:hidden">Register IP</span>
             </>
           )}
         </Button>
 
         {!project.outputUri && (
-          <p className="text-sm text-yellow-600">
-            Project must be exported before IP registration
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-yellow-600 text-center">
+              Project must be exported before IP registration
+            </p>
+            <Button
+              onClick={handleRefreshProject}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              Refresh Project Status
+            </Button>
+          </div>
         )}
 
-        {isLoading && (
-          <div className="text-xs text-muted-foreground">
+        {isRegistering && (
+          <div className="text-xs text-muted-foreground text-center">
             This may take a few moments. Please don't close this window.
           </div>
         )}

@@ -28,24 +28,56 @@ export async function POST(request: NextRequest) {
 }
 
 async function uploadToIPFS(metadata: any): Promise<string> {
-  // Choose your IPFS service:
+  // Check which IPFS service is configured
+  const services = [];
+  
+  if (process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY) {
+    services.push('Lighthouse');
+  }
+  if (process.env.NEXT_PUBLIC_PINATA_JWT) {
+    services.push('Pinata');
+  }
+  if (process.env.NEXT_PUBLIC_NFT_STORAGE_API_KEY) {
+    services.push('NFT.Storage');
+  }
 
-  // Option 1: Lighthouse Storage
-  if (process.env.LIGHTHOUSE_API_KEY) {
-    return await uploadToLighthouse(metadata);
+  console.log(`Available IPFS services: ${services.join(', ') || 'None'}`);
+
+  if (services.length === 0) {
+    // Return a mock IPFS URI for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development mode: Returning mock IPFS URI');
+      return `ipfs://mock-dev-${Date.now()}`;
+    }
+    throw new Error('No IPFS service configured. Please set up Lighthouse, Pinata, or NFT.Storage.');
+  }
+
+  // Try services in order of preference
+  if (process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY) {
+    try {
+      return await uploadToLighthouse(metadata);
+    } catch (error) {
+      console.warn('Lighthouse upload failed, trying next service:', error);
+    }
   }
   
-  // Option 2: Pinata
-  if (process.env.PINATA_API_KEY) {
-    return await uploadToPinata(metadata);
+  if (process.env.NEXT_PUBLIC_PINATA_JWT) {
+    try {
+      return await uploadToPinata(metadata);
+    } catch (error) {
+      console.warn('Pinata upload failed, trying next service:', error);
+    }
+  }
+  
+  if (process.env.NEXT_PUBLIC_NFT_STORAGE_API_KEY) {
+    try {
+      return await uploadToNFTStorage(metadata);
+    } catch (error) {
+      console.warn('NFT.Storage upload failed:', error);
+    }
   }
 
-  // Option 3: NFT.Storage
-  if (process.env.NFT_STORAGE_API_KEY) {
-    return await uploadToNFTStorage(metadata);
-  }
-
-  throw new Error('No IPFS service configured');
+  throw new Error('All IPFS services failed');
 }
 
 async function uploadToLighthouse(metadata: any): Promise<string> {

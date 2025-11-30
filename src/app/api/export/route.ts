@@ -14,14 +14,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update project with export URL in database
-    await updateProjectExportUrl(projectId, exportUrl);
+    // Update project and get the updated project object
+    const updatedProject = await updateProjectExportUrl(projectId, exportUrl);
+    
+    console.log('Updated project with outputUri:', updatedProject.outputUri);
 
-    return NextResponse.json({
-      success: true,
-      message: 'Project export URL updated successfully',
-      downloadUrl: exportUrl,
-    });
+    return NextResponse.json(updatedProject);
   } catch (error) {
     console.error('Export URL update error:', error);
     return NextResponse.json(
