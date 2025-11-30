@@ -1,17 +1,34 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
 
-const ffmpeg = new FFmpeg();
+// Initialize FFmpeg instance only on client side
+let ffmpeg: FFmpeg | null = null;
 let isLoaded = false;
 
+// Check if we're in the browser
+const isBrowser = typeof window !== 'undefined';
+
 export async function loadFFmpeg(): Promise<void> {
+  if (!isBrowser) {
+    throw new Error('FFmpeg can only be loaded in the browser');
+  }
+
   if (!isLoaded) {
+    console.log('Loading FFmpeg WASM...');
+    
+    if (!ffmpeg) {
+      ffmpeg = new FFmpeg();
+    }
+    
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
     });
+    
     isLoaded = true;
+    console.log('FFmpeg WASM loaded successfully');
   }
 }
 
@@ -25,101 +42,102 @@ export interface VideoCompositionOptions {
 }
 
 export async function composeVideoClient(options: VideoCompositionOptions): Promise<Blob> {
+  if (!isBrowser) {
+    throw new Error('Video composition can only be done in the browser');
+  }
+
   await loadFFmpeg();
   
   const { imageFiles, audioFile, duration, syncPoints, outputFormat, resolution = { width: 640, height: 640 } } = options;
   
-  // Write input files to FFmpeg using new API
-  const audioData = await audioFile.arrayBuffer();
-  await ffmpeg.writeFile('audio.mp3', new Uint8Array(audioData));
+  console.log('Starting video composition with FFmpeg WASM...');
   
-  for (let i = 0; i < imageFiles.length; i++) {
-    const imageData = await imageFiles[i].arrayBuffer();
-    await ffmpeg.writeFile(`image${i}.jpg`, new Uint8Array(imageData));
+  if (!ffmpeg) {
+    throw new Error('FFmpeg not initialized');
   }
-  
-  // Generate filter complex for transitions
-  const filterComplex = generateFilterComplex(imageFiles.length, syncPoints, duration, resolution);
-  
-  // Run FFmpeg command using new API
-  await ffmpeg.exec([
-    '-i', 'audio.mp3',
-    ...imageFiles.flatMap((_, i) => ['-i', `image${i}.jpg`]),
-    '-filter_complex', filterComplex,
-    '-map', '[v]',
-    '-map', '0:a',
-    '-c:v', outputFormat === 'gif' ? 'gif' : 'libx264',
-    '-c:a', 'aac',
-    '-pix_fmt', 'yuv420p',
-    '-shortest',
-    `output.${outputFormat}`
-  ]);
-  
-  // Read output file using new API
-  const data = await ffmpeg.readFile(`output.${outputFormat}`);
-  return new Blob([data], { type: `video/${outputFormat}` });
-}
 
-function generateFilterComplex(
-  imageCount: number,
-  syncPoints: number[],
-  totalDuration: number,
-  resolution: { width: number; height: number }
-): string {
-  const inputs = Array.from({ length: imageCount }, (_, i) => `[${i + 1}:v]`);
-  const scaleFilters = inputs.map((input, i) => 
-    `${input}scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=disable[img${i}];`
-  ).join('');
-
-  // Create crossfade transitions between images
-  const transitionFilters = [];
-  for (let i = 0; i < imageCount - 1; i++) {
-    const transitionDuration = 0.5; // 0.5 second crossfade
-    const transitionStart = syncPoints[i + 1] - transitionDuration;
+  try {
+    // Write input files to FFmpeg
+    console.log('Writing audio file to FFmpeg...');
+    const audioData = await audioFile.arrayBuffer();
+    await ffmpeg.writeFile('audio.mp3', new Uint8Array(audioData));
     
-    transitionFilters.push(
-      `[v${i}][img${i + 1}]xfade=transition=fade:duration=${transitionDuration}:offset=${transitionStart}[v${i + 1}];`
-    );
+    console.log('Writing image files to FFmpeg...');
+    for (let i = 0; i < imageFiles.length; i++) {
+      const imageData = await imageFiles[i].arrayBuffer();
+      await ffmpeg.writeFile(`image${i}.jpg`, new Uint8Array(imageData));
+    }
+    
+    // Generate FFmpeg command for simple video composition
+    const command = [
+      '-loop', '1', // Loop the image
+      '-i', 'image0.jpg', // Use first image
+      '-i', 'audio.mp3', // Audio input
+      '-c:v', 'libx264', // Video codec
+      '-c:a', 'aac', // Audio codec
+      '-t', duration.toString(), // Duration
+      '-pix_fmt', 'yuv420p', // Pixel format
+      '-shortest', // Finish when audio ends
+      '-y', // Overwrite output
+      `output.${outputFormat}`
+    ];
+    
+    console.log('Running FFmpeg command:', command.join(' '));
+    
+    // Execute FFmpeg command
+    await ffmpeg.exec(command);
+    
+    // Read output file
+    console.log('Reading output file...');
+    const data = await ffmpeg.readFile(`output.${outputFormat}`);
+    
+    // Clean up files
+    console.log('Cleaning up temporary files...');
+    await ffmpeg.deleteFile('audio.mp3');
+    await ffmpeg.deleteFile('image0.jpg');
+    await ffmpeg.deleteFile(`output.${outputFormat}`);
+    
+    // Create blob from output
+    const blob = new Blob([data], { type: `video/${outputFormat}` });
+    console.log('Video composition completed successfully');
+    
+    return blob;
+    
+  } catch (error) {
+    console.error('FFmpeg composition error:', error);
+    throw new Error(`Video composition failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
-  // First image
-  transitionFilters.unshift(`[img0]null[v0];`);
-
-  const finalVideo = `[v${imageCount - 1}]`;
-  
-  return [
-    scaleFilters,
-    transitionFilters.join(''),
-    `${finalVideo}format=yuv420p[v]`
-  ].join('');
 }
 
+// Simple waveform extraction (optional)
 export async function extractAudioWaveform(audioFile: File): Promise<number[]> {
+  if (!isBrowser) {
+    return [];
+  }
+
   await loadFFmpeg();
   
-  // Write audio file using new API
-  const audioData = await audioFile.arrayBuffer();
-  await ffmpeg.writeFile('audio.mp3', new Uint8Array(audioData));
-  
-  // Run FFmpeg command using new API
-  await ffmpeg.exec([
-    '-i', 'audio.mp3',
-    '-filter_complex', 'compand,showwavespic=colors=white:split_channels=1',
-    '-frames:v', '1',
-    'waveform.png'
-  ]);
-  
-  // Read output file using new API
-  const data = await ffmpeg.readFile('waveform.png');
-  
-  // Convert image data to waveform points (simplified)
-  // In a real implementation, you'd analyze the image to extract waveform data
-  const waveform: number[] = [];
-  const steps = 100;
-  
-  for (let i = 0; i < steps; i++) {
-    waveform.push(Math.random() * 0.8 + 0.2); // Placeholder
+  if (!ffmpeg) {
+    return [];
   }
-  
-  return waveform;
+
+  try {
+    const audioData = await audioFile.arrayBuffer();
+    await ffmpeg.writeFile('audio.mp3', new Uint8Array(audioData));
+    
+    // Simple placeholder implementation
+    const waveform: number[] = [];
+    const steps = 100;
+    
+    for (let i = 0; i < steps; i++) {
+      waveform.push(Math.random() * 0.8 + 0.2);
+    }
+    
+    await ffmpeg.deleteFile('audio.mp3');
+    
+    return waveform;
+  } catch (error) {
+    console.error('Waveform extraction error:', error);
+    return [];
+  }
 }

@@ -16,9 +16,14 @@ import { MemeTemplate } from '@/types/Meme';
 import { AudioTrack } from '@/types/Audio';
 import { SyncProject } from '@/types/Project';
 
+interface ProjectWithMedia extends SyncProject {
+  memeImageUrl: string;
+  audioUrl: string;
+}
+
 export default function Home() {
   const { isConnected, address } = useAccount();
-  const [currentProject, setCurrentProject] = useState<SyncProject | null>(null);
+  const [currentProject, setCurrentProject] = useState<ProjectWithMedia | null>(null);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,7 +81,14 @@ export default function Home() {
       console.log('Sync result from API:', syncResult);
       
       if (syncResult.success && syncResult.project) {
-        setCurrentProject(syncResult.project);
+        // Create a project object that includes the media URLs
+        const projectWithMedia = {
+          ...syncResult.project,
+          memeImageUrl: selectedMeme.imageUrl, // Add the meme URL
+          audioUrl: selectedAudio.url, // Add the audio URL
+        };
+        
+        setCurrentProject(projectWithMedia);
       } else {
         throw new Error('Sync completed but no project returned');
       }
