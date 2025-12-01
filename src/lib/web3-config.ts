@@ -38,7 +38,7 @@ const { chains, publicClient, webSocketPublicClient } = configureChains(
   [publicProvider()],
 )
 
-// Set up connectors with INJECTED (browser extension) FIRST
+// Set up connectors
 const connectors = [
   new InjectedConnector({
     chains,

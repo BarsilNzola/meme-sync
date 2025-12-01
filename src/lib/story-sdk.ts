@@ -1,5 +1,11 @@
 import { StoryClient, IpMetadata, PILFlavor, WIP_TOKEN_ADDRESS } from '@story-protocol/core-sdk';
-import { toHex, zeroAddress, http } from 'viem';
+import { toHex } from 'viem';
+
+// Use the pre-created SPG contract from environment
+const SPG_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SPG_CONTRACT_ADDRESS as `0x${string}`;
+
+// Contract addresses from Story Protocol Aeneid testnet
+const ROYALTY_POLICY_LAP = '0xBe54FB168b3c982b7AaE60dB6CF75Bd8447b390E' as `0x${string}`;
 
 interface IPRegistrationOptions {
   projectId: string;
@@ -18,58 +24,28 @@ interface RegistrationResult {
   spgNftContract?: string;
 }
 
-// Contract addresses from Story Protocol Aeneid testnet
-const ROYALTY_POLICY_LAP = '0xBe54FB168b3c982b7AaE60dB6CF75Bd8447b390E' as `0x${string}`;
-
-// We'll create our own SPG NFT collection
-let memesyncNFTContract: string | null = null;
-
 export async function registerIPAsset(options: IPRegistrationOptions): Promise<RegistrationResult> {
   const { projectId, projectName, memeId, outputUri, metadataUri, walletClient } = options;
 
   try {
     console.log('Initializing Story Protocol client for Aeneid testnet...');
 
-    // Simple client initialization
-    const client = StoryClient.newClient({
-      account: walletClient.account,
-      transport: http('https://aeneid.storyrpc.io'),
-      chainId: 'aeneid',
-    } as any);
-
-    console.log('Story Protocol client initialized successfully');
-
-    // Create or get our MemeSync SPG NFT collection
-    let spgNftContract: string | null = memesyncNFTContract;
-    if (!spgNftContract) {
-      console.log('Creating MemeSync SPG NFT collection...');
-      
-      // Use EXACTLY the parameters from the working documentation
-      const newCollection = await client.nftClient.createNFTCollection({
-        name: "MemeSync Creations",
-        symbol: "MSYNC", 
-        isPublicMinting: true,
-        mintOpen: true,
-        mintFeeRecipient: zeroAddress,
-        contractURI: "",
-      });
-
-      if (!newCollection.spgNftContract) {
-        throw new Error('Failed to create SPG NFT collection - no contract address returned');
-      }
-      
-      spgNftContract = newCollection.spgNftContract;
-      memesyncNFTContract = spgNftContract;
-      
-      console.log('New collection created:', {
-        'SPG NFT Contract Address': newCollection.spgNftContract,
-        'Transaction Hash': newCollection.txHash,
-      });
-    } else {
-      console.log('Using existing MemeSync SPG NFT collection:', spgNftContract);
+    // Validate wallet connection
+    if (!walletClient || !walletClient.account) {
+      throw new Error('Wallet not properly connected. Please connect your wallet first.');
     }
 
-    // Generate metadata (rest of your existing code remains the same)
+    // Initialize client with user's wallet - USE TYPE ASSERTION
+    const client = StoryClient.newClient({
+      account: walletClient.account,
+      transport: 'https://aeneid.storyrpc.io', // Use string instead of http()
+      chainId: 'aeneid',
+    } as any); // Type assertion to handle version mismatch
+
+    console.log('Story Protocol client initialized successfully');
+    console.log('Using SPG NFT collection:', SPG_CONTRACT_ADDRESS);
+
+    // Generate metadata
     const ipMetadata = {
       title: projectId,
       description: `MemeSync creation: ${projectName}`,
@@ -129,11 +105,11 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
 
     console.log('Registering IP asset with Story Protocol...');
 
-    // Register the IP asset using our custom SPG NFT collection
+    // Register the IP asset using the pre-created SPG NFT collection
     const response = await client.ipAsset.registerIpAsset({
       nft: { 
         type: 'mint' as const, 
-        spgNftContract: spgNftContract as `0x${string}`
+        spgNftContract: SPG_CONTRACT_ADDRESS
       },
       licenseTermsData: [
         {
@@ -169,7 +145,7 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
     console.log('IP Asset created on Aeneid:', {
       'Transaction Hash': response.txHash,
       'IPA ID': response.ipId,
-      'SPG NFT Contract': spgNftContract
+      'SPG NFT Contract': SPG_CONTRACT_ADDRESS
     });
 
     // Handle the response structure properly
@@ -182,7 +158,7 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
       ipAssetId: response.ipId!,
       txHash: response.txHash!,
       licenseTermsIds,
-      spgNftContract: spgNftContract!,
+      spgNftContract: SPG_CONTRACT_ADDRESS,
     };
 
   } catch (error: any) {
@@ -191,9 +167,9 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
     if (error.message?.includes('user rejected')) {
       throw new Error('Transaction was rejected by your wallet');
     } else if (error.message?.includes('insufficient funds')) {
-      throw new Error('Insufficient funds for transaction');
+      throw new Error('Insufficient funds for transaction. You need IP tokens for gas.');
     } else if (error.message?.includes('unknown account')) {
-      throw new Error('Wallet connection issue. Please ensure your wallet is properly connected and you\'re on the correct network.');
+      throw new Error('Wallet connection issue. Please ensure your wallet is properly connected.');
     } else {
       throw new Error(`Registration failed: ${error.message || 'Unknown error'}`);
     }

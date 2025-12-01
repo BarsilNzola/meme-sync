@@ -2,14 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { WagmiConfig } from 'wagmi';
+import { WagmiConfig } from 'wagmi'; // ← WagmiConfig for v1.x
 import { config } from '@/lib/web3-config';
 
 export default function Web3Provider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
-    <WagmiConfig config={config}>
+    <WagmiConfig config={config}> {/* ← WagmiConfig for v1.x */}
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>
