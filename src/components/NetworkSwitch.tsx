@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { aeneid } from '@/lib/web3-config'; 
 import { AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 
-export function NetworkSwitch() {
+export default function NetworkSwitch() {
   const { isConnected, chain } = useAccount();
   const currentChainId = useChainId();
   

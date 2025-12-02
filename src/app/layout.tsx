@@ -2,16 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Web3Provider from '@/providers/Web3Provider'
 import { Toaster } from '@/components/ui/toaster'
-import dynamic from 'next/dynamic'
-
-// Dynamically import NetworkSwitch with no SSR
-const NetworkSwitch = dynamic(
-  () => import('@/components/NetworkSwitch').then((mod) => mod.NetworkSwitch),
-  { 
-    ssr: false,
-    loading: () => null
-  }
-)
+import NetworkSwitch from '@/components/NetworkSwitch'
 
 export const metadata: Metadata = {
   title: 'MemeSync - Sync Memes with AI Audio',
