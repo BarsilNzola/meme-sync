@@ -73,7 +73,7 @@ export default function MemeUploader({ onMemeSelect }: MemeUploaderProps) {
       const customMeme: MemeTemplate = {
         id: `custom_${Date.now()}`,
         name: file.name,
-        imageUrl: imageUrl, // This is now a permanent URL from Supabase
+        imageUrl: imageUrl,
         duration: 5,
         frameCount: 1,
         defaultTiming: [0],

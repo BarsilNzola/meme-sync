@@ -33,8 +33,8 @@ const aeneid = {
 // Define transports for each chain using the http utility from wagmi
 const transports = {
   [aeneid.id]: http('https://aeneid.storyrpc.io'),
-  [sepolia.id]: http(), // Use default public RPC for sepolia
-  [mainnet.id]: http(),  // Use default public RPC for mainnet
+  [sepolia.id]: http(), 
+  [mainnet.id]: http(),  
 }
 
 // Create Wagmi v2 config

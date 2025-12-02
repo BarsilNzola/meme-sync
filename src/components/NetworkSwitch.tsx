@@ -77,7 +77,7 @@ export function NetworkSwitch() {
           </div>
           
           <div className="text-sm text-gray-400">
-            <p>⚠️ Your registration will fail if you don't switch networks.</p>
+            <p>Your registration will fail if you don't switch networks.</p>
             <p className="mt-1">You'll need IP tokens on the Aeneid network for gas fees.</p>
           </div>
         </div>

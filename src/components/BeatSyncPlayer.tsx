@@ -94,7 +94,7 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
   const actualDuration = audioDuration > 0 ? audioDuration : duration;
   const progress = actualDuration > 0 ? (currentTime / actualDuration) * 100 : 0;
 
-  // Use syncPoints from the project (this exists in your SyncProject type)
+  // Use syncPoints from the project
   const syncPoints = project.syncPoints || [];
 
   return (

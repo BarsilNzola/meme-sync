@@ -119,7 +119,7 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
 
     console.log('Registering IP asset with Story Protocol...');
 
-    // Use direct contract call with mintAndRegisterIp (what worked)
+    // Use direct contract call with mintAndRegisterIp
     const publicClient = createPublicClient({
       transport: http('https://aeneid.storyrpc.io'),
     });
@@ -212,7 +212,7 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
 
         if (decoded.eventName === 'IPRegistered') {
           ipId = decoded.args.ipId;
-          console.log('✅ IPRegistered event found! IP ID:', ipId);
+          console.log('IPRegistered event found! IP ID:', ipId);
           break;
         }
       } catch (e) {
@@ -267,17 +267,17 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
         functionName: 'ipId',
         args: [BigInt(1315), SPG_CONTRACT_ADDRESS as `0x${string}`, tokenId],
       });
-      console.log('✅ Calculated IP ID:', ipId);
+      console.log('Calculated IP ID:', ipId);
     }
     
     if (!ipId) {
       throw new Error('Could not determine IP ID');
     }
 
-    console.log('🎉 IP Asset registered successfully!');
-    console.log('📍 IP ID:', ipId);
-    console.log('🔗 Transaction Hash:', hash);
-    console.log('📝 View on explorer:', `https://aeneid-explorer.storyprotocol.xyz/ipa/${ipId}`);
+    console.log('IP Asset registered successfully!');
+    console.log('IP ID:', ipId);
+    console.log('Transaction Hash:', hash);
+    console.log('View on explorer:', `https://aeneid-explorer.storyprotocol.xyz/ipa/${ipId}`);
 
     return {
       success: true,
