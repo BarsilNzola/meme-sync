@@ -1,5 +1,5 @@
 {
     "installCommand": "npm install --legacy-peer-deps",
-    "buildCommand": "npm run build",
+    "buildCommand": "TURBOPACK=0 npm run build",
     "framework": "nextjs"
 }
