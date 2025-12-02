@@ -1,11 +1,9 @@
-import { createConfig, configureChains } from 'wagmi'
-import { mainnet, sepolia, polygon } from 'wagmi/chains'
-import { publicProvider } from 'wagmi/providers/public'
-import { InjectedConnector } from 'wagmi/connectors/injected'
-import { WalletConnectConnector } from 'wagmi/connectors/walletConnect'
-import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet'
+import { createConfig, http } from 'wagmi'
+import { mainnet, sepolia } from 'wagmi/chains'
+import { injected } from 'wagmi/connectors'
+import { walletConnect } from 'wagmi/connectors'
+import { coinbaseWallet } from 'wagmi/connectors'
 
-// Story Protocol Aeneid testnet
 const aeneid = {
   id: 1315,
   name: 'Story Aeneid',
@@ -32,48 +30,35 @@ const aeneid = {
   testnet: true,
 } as const
 
-// Configure chains & providers
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [aeneid, sepolia, mainnet, polygon],
-  [publicProvider()],
-)
+// Define transports for each chain using the http utility from wagmi
+const transports = {
+  [aeneid.id]: http('https://aeneid.storyrpc.io'),
+  [sepolia.id]: http(), // Use default public RPC for sepolia
+  [mainnet.id]: http(),  // Use default public RPC for mainnet
+}
 
-// Set up connectors
-const connectors = [
-  new InjectedConnector({
-    chains,
-    options: {
-      shimDisconnect: true,
-      name: (detectedName) => `Browser Wallet (${detectedName})`,
-    },
-  }),
-  new WalletConnectConnector({
-    chains,
-    options: {
+// Create Wagmi v2 config
+export const config = createConfig({
+  // Use http for all transports
+  transports,
+  // Define chains
+  chains: [aeneid, sepolia, mainnet],
+  // Define connectors
+  connectors: [
+    // Injected Connector (MetaMask, etc.)
+    injected({ shimDisconnect: true }), 
+    
+    // WalletConnect Connector
+    walletConnect({
       projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-key',
       showQrModal: true,
-      metadata: {
-        name: 'MemeSync',
-        description: 'Sync memes with AI-generated audio and register on Story Protocol',
-        url: 'https://memesync.xyz',
-        icons: ['https://memesync.xyz/icon.png'],
-      },
-    },
-  }),
-  new CoinbaseWalletConnector({
-    chains,
-    options: {
+    }),
+    
+    // Coinbase Wallet Connector
+    coinbaseWallet({
       appName: 'MemeSync',
-    },
-  }),
-]
-
-// Create Wagmi config
-export const config = createConfig({
-  autoConnect: true,
-  connectors,
-  publicClient,
-  webSocketPublicClient,
+    }),
+  ],
 })
 
 export { aeneid }

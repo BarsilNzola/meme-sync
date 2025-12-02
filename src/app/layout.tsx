@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import Web3Provider from '@/providers/Web3Provider'
+import { NetworkSwitch } from '@/components/NetworkSwitch';
 import { Toaster } from '@/components/ui/toaster'
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
         <Web3Provider>
           {children}
+          <NetworkSwitch />
           <Toaster />
         </Web3Provider>
       </body>

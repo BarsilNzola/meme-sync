@@ -45,8 +45,14 @@
     "tailwind-merge": "^2.0.0",
     "typescript": "^5.9.3",
     "uuid": "^13.0.0",
-    "viem": "^1.21.3",
-    "wagmi": "^1.4.11"
+    "viem": "^2.40.3",
+    "wagmi": "^2.9.1"
+  },
+  "resolutions": {
+    "viem": "^2.40.3"
+  },
+  "overrides": {
+    "viem": "^2.40.3"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",

@@ -5,7 +5,7 @@ import { Shield, CheckCircle, XCircle, ExternalLink, Loader2 } from 'lucide-reac
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useChainId } from 'wagmi';
 import { SyncProject } from '@/types/Project';
 import { useToast } from '@/hooks/use-toast';
 import { registerIPAsset } from '@/lib/story-sdk';
@@ -23,6 +23,7 @@ interface IPRegistrationBadgeProps {
 export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProps) {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const chainId = useChainId();
   const { toast } = useToast();
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,18 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       });
       return;
     }
+  
+    // CHECK NETWORK FIRST
+    const storyAeneidChainId = 1315;
+  if (chainId !== storyAeneidChainId) {
+    toast({
+      title: 'Wrong Network',
+      description: `Please switch to Story Aeneid (Chain ID: ${storyAeneidChainId}) before registering.`,
+      variant: 'destructive',
+      duration: 10000,
+    });
+    return;
+  }
 
     setIsRegistering(true);
     setError(null);
