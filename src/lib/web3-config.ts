@@ -4,7 +4,7 @@ import { injected } from 'wagmi/connectors'
 import { walletConnect } from 'wagmi/connectors'
 import { coinbaseWallet } from 'wagmi/connectors'
 
-const aeneid = {
+export const aeneid = {
   id: 1315,
   name: 'Story Aeneid',
   network: 'aeneid',
@@ -30,35 +30,27 @@ const aeneid = {
   testnet: true,
 } as const
 
-// Define transports for each chain using the http utility from wagmi
-const transports = {
-  [aeneid.id]: http('https://aeneid.storyrpc.io'),
-  [sepolia.id]: http(), 
-  [mainnet.id]: http(),  
+// Instead, create a function that creates config only on client
+export function createWagmiConfig() {
+  // This will only be called on client side
+  const transports = {
+    [aeneid.id]: http('https://aeneid.storyrpc.io'),
+    [sepolia.id]: http(), 
+    [mainnet.id]: http(),  
+  }
+
+  return createConfig({
+    transports,
+    chains: [aeneid, sepolia, mainnet],
+    connectors: [
+      injected({ shimDisconnect: true }), 
+      walletConnect({
+        projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-key',
+        showQrModal: true,
+      }),
+      coinbaseWallet({
+        appName: 'MemeSync',
+      }),
+    ],
+  })
 }
-
-// Create Wagmi v2 config
-export const config = createConfig({
-  // Use http for all transports
-  transports,
-  // Define chains
-  chains: [aeneid, sepolia, mainnet],
-  // Define connectors
-  connectors: [
-    // Injected Connector (MetaMask, etc.)
-    injected({ shimDisconnect: true }), 
-    
-    // WalletConnect Connector
-    walletConnect({
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-key',
-      showQrModal: true,
-    }),
-    
-    // Coinbase Wallet Connector
-    coinbaseWallet({
-      appName: 'MemeSync',
-    }),
-  ],
-})
-
-export { aeneid }
