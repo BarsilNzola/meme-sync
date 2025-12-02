@@ -15,15 +15,9 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Environment Variables Status:', {
       nodeEnv: process.env.NODE_ENV,
       // Check both public and non-public versions
-      lighthouseKeyExists: !!(process.env.LIGHTHOUSE_API_KEY || process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY),
       pinataJwtExists: !!(process.env.PINATA_JWT || process.env.NEXT_PUBLIC_PINATA_JWT),
       nftStorageKeyExists: !!(process.env.NFT_STORAGE_API_KEY || process.env.NEXT_PUBLIC_NFT_STORAGE_API_KEY),
       // Show first few chars if they exist (for verification, not full keys)
-      lighthousePreview: process.env.LIGHTHOUSE_API_KEY 
-        ? `${process.env.LIGHTHOUSE_API_KEY.substring(0, 5)}...` 
-        : process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY 
-          ? `${process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY.substring(0, 5)}... (NEXT_PUBLIC)`
-          : 'none',
       pinataPreview: process.env.PINATA_JWT
         ? `${process.env.PINATA_JWT.substring(0, 5)}...`
         : process.env.NEXT_PUBLIC_PINATA_JWT
@@ -73,31 +67,19 @@ function getEnvVar(key: string): string | undefined {
 
 async function uploadToIPFS(metadata: any): Promise<string> {
   // Get env vars using helper
-  const lighthouseKey = getEnvVar('LIGHTHOUSE_API_KEY');
   const pinataJWT = getEnvVar('PINATA_JWT');
   const nftStorageKey = getEnvVar('NFT_STORAGE_API_KEY');
 
   console.log('Available IPFS services:', {
-    lighthouse: !!lighthouseKey,
     pinata: !!pinataJWT,
     nftStorage: !!nftStorageKey,
   });
 
   // In development with no services, return mock
-  if (process.env.NODE_ENV === 'development' && !lighthouseKey && !pinataJWT && !nftStorageKey) {
+  if (process.env.NODE_ENV === 'development' && !pinataJWT && !nftStorageKey) {
     console.log('Development mode: No IPFS services configured, returning mock URI');
     const mockHash = `Qm${Date.now().toString(36)}${Math.random().toString(36).substring(2, 10)}`.padEnd(46, '0').substring(0, 46);
     return `ipfs://${mockHash}`;
-  }
-
-  // Try services in order of preference
-  if (lighthouseKey) {
-    try {
-      console.log('Trying Lighthouse...');
-      return await uploadToLighthouse(metadata, lighthouseKey);
-    } catch (error: any) {
-      console.warn('Lighthouse upload failed:', error.message);
-    }
   }
   
   if (pinataJWT) {
@@ -119,38 +101,6 @@ async function uploadToIPFS(metadata: any): Promise<string> {
   }
 
   throw new Error('All IPFS services failed or no services configured');
-}
-
-async function uploadToLighthouse(metadata: any, apiKey: string): Promise<string> {
-  console.log('Calling Lighthouse API...');
-  
-  const response = await fetch('https://api.lighthouse.storage/api/lighthouse/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      data: JSON.stringify(metadata),
-      name: `memesync-${Date.now()}.json`,
-    }),
-  });
-
-  console.log('Lighthouse response status:', response.status);
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Lighthouse API error:', { 
-      status: response.status, 
-      statusText: response.statusText,
-      errorPreview: errorText.substring(0, 200)
-    });
-    throw new Error(`Lighthouse upload failed: ${response.status} ${response.statusText}`);
-  }
-
-  const result = await response.json();
-  console.log('Lighthouse upload successful, hash:', result.Hash);
-  return `ipfs://${result.Hash}`;
 }
 
 async function uploadToPinata(metadata: any, jwt: string): Promise<string> {
