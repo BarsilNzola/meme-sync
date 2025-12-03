@@ -97,8 +97,10 @@ export async function composeVideoClient(options: VideoCompositionOptions): Prom
     await ffmpeg.deleteFile('image0.jpg');
     await ffmpeg.deleteFile(`output.${outputFormat}`);
     
-    // Create blob from output
-    const blob = new Blob([data], { type: `video/${outputFormat}` });
+    // Create blob from output - fix the type issue
+    // Type assertion to handle the Uint8Array type
+    const blobData = data as Uint8Array;
+    const blob = new Blob([blobData], { type: `video/${outputFormat}` });
     console.log('Video composition completed successfully');
     
     return blob;
