@@ -1,6 +1,15 @@
 // next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Disable server-side rendering for problematic packages
+  experimental: {
+    serverComponentsExternalPackages: [
+      '@metamask/sdk',
+      '@walletconnect/universal-provider',
+      '@walletconnect/sign-client',
+      '@walletconnect/ethereum-provider',
+    ],
+  },
   
   webpack: (config, { isServer, webpack }) => {
     // Prevent processing of problematic Node.js modules
