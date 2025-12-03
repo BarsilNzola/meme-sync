@@ -30,27 +30,34 @@ export const aeneid = {
   testnet: true,
 } as const
 
-// Instead, create a function that creates config only on client
 export function createWagmiConfig() {
-  // This will only be called on client side
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-key';
+  
   const transports = {
     [aeneid.id]: http('https://aeneid.storyrpc.io'),
     [sepolia.id]: http(), 
     [mainnet.id]: http(),  
   }
 
+  // Create connectors
+  const connectors = [
+    injected({ shimDisconnect: true }), 
+    walletConnect({
+      projectId,
+      showQrModal: true,
+    }),
+    coinbaseWallet({
+      appName: 'MemeSync',
+      appLogoUrl: 'https://memesync.vercel.app/logo.png',
+    }),
+  ];
+
+  console.log('Creating wagmi config with connectors:', connectors.map(c => c.name));
+
   return createConfig({
     transports,
     chains: [aeneid, sepolia, mainnet],
-    connectors: [
-      injected({ shimDisconnect: true }), 
-      walletConnect({
-        projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-key',
-        showQrModal: true,
-      }),
-      coinbaseWallet({
-        appName: 'MemeSync',
-      }),
-    ],
-  })
+    connectors,
+    ssr: false, // Important: disable SSR
+  });
 }

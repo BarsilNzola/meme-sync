@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LogOut, Wallet, User, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,17 +20,29 @@ export default function WalletConnect() {
   const { disconnect } = useDisconnect();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [availableConnectors, setAvailableConnectors] = useState<any[]>([]);
 
-  const handleConnect = async (connectorId: string) => {
-    try {
-      const connector = connectors.find(c => c.id === connectorId);
-      if (connector) {
-        await connect({ connector });
-        toast({
-          title: 'Wallet Connected!',
-          description: 'Your wallet is now connected to MemeSync.',
-        });
+  // Filter out connectors that aren't available
+  useEffect(() => {
+    // Filter connectors - some might not be available in the current environment
+    const filtered = connectors.filter(c => {
+      // Check if connector is available
+      if (c.id.includes('injected') && typeof window !== 'undefined') {
+        // Check if an injected wallet is available
+        return !!(window as any).ethereum;
       }
+      return true;
+    });
+    setAvailableConnectors(filtered);
+  }, [connectors]);
+
+  const handleConnect = async (connector: any) => {
+    try {
+      await connect({ connector });
+      toast({
+        title: 'Wallet Connected!',
+        description: 'Your wallet is now connected to MemeSync.',
+      });
     } catch (error: any) {
       console.error('Connection error:', error);
       toast({
@@ -69,16 +81,13 @@ export default function WalletConnect() {
   const getNetworkBadge = () => {
     if (!connector) return null;
     
-    // Get connector name and handle string/string[] properly
-    const connectorName = connector.name;
-    const name = Array.isArray(connectorName) ? connectorName[0] : connectorName;
-    const lowerName = (name || '').toLowerCase();
-    
-    if (lowerName.includes('metamask')) return '🦊';
-    if (lowerName.includes('coinbase')) return '💰';
-    if (lowerName.includes('walletconnect')) return '🔗';
-    if (lowerName.includes('trust')) return '🔒';
-    if (lowerName.includes('phantom')) return '👻';
+    const name = connector.name.toLowerCase();
+    if (name.includes('metamask')) return '🦊';
+    if (name.includes('coinbase')) return '💰';
+    if (name.includes('walletconnect')) return '🔗';
+    if (name.includes('trust')) return '🔒';
+    if (name.includes('phantom')) return '👻';
+    if (name.includes('injected')) return '🌐';
     return '🔷';
   };
 
@@ -94,36 +103,34 @@ export default function WalletConnect() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Choose Wallet</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            onClick={() => handleConnect('injected')} 
-            disabled={isConnecting}
-            className="cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <span>🦊</span>
-              <span>MetaMask / Injected</span>
-            </div>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => handleConnect('coinbaseWallet')} 
-            disabled={isConnecting}
-            className="cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <span>💰</span>
-              <span>Coinbase Wallet</span>
-            </div>
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => handleConnect('walletConnect')} 
-            disabled={isConnecting}
-            className="cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <span>🔗</span>
-              <span>WalletConnect</span>
-            </div>
-          </DropdownMenuItem>
+          {availableConnectors.map((connector) => {
+            // Get connector display name
+            let displayName = connector.name;
+            let emoji = '🔷';
+            
+            if (connector.id.includes('injected')) {
+              displayName = 'Browser Wallet';
+              emoji = typeof window !== 'undefined' && (window as any).ethereum ? '🦊' : '🌐';
+            } else if (connector.id.includes('coinbase')) {
+              emoji = '💰';
+            } else if (connector.id.includes('walletConnect')) {
+              emoji = '🔗';
+            }
+            
+            return (
+              <DropdownMenuItem 
+                key={connector.uid}
+                onClick={() => handleConnect(connector)} 
+                disabled={isConnecting}
+                className="cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <span>{emoji}</span>
+                  <span>{displayName}</span>
+                </div>
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
     );

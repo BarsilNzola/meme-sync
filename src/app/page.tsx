@@ -29,6 +29,7 @@ export default function Home() {
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showTimeout, setShowTimeout] = useState(false);
 
   // Calculate duration based on selected meme and audio
   const calculateDuration = () => {
@@ -46,6 +47,15 @@ export default function Home() {
       isDisconnected,
       status
     });
+
+    if (isConnecting) {
+      const timer = setTimeout(() => {
+        setShowTimeout(true);
+      }, 5000); // Show timeout message after 5 seconds
+      return () => clearTimeout(timer);
+    } else {
+      setShowTimeout(false);
+    }
 
     if (!isConnected) {
       setCurrentProject(null);
