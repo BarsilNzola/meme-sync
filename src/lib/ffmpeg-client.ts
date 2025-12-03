@@ -97,12 +97,27 @@ export async function composeVideoClient(options: VideoCompositionOptions): Prom
     await ffmpeg.deleteFile('image0.jpg');
     await ffmpeg.deleteFile(`output.${outputFormat}`);
     
-    // Create blob from output - fix the type issue
-    // Type assertion to handle the Uint8Array type
-    const blobData = data as Uint8Array;
+    // Handle the data properly - TypeScript-safe approach
+    let blobData: BlobPart;
+    
+    // Check if data is a Uint8Array by checking its properties
+    if (data && typeof data === 'object' && 'byteLength' in data && 'byteOffset' in data && 'buffer' in data) {
+      // It's likely a Uint8Array or similar ArrayBufferView
+      blobData = data as Uint8Array;
+    } else if (data && typeof data === 'object' && 'byteLength' in data) {
+      // It might be an ArrayBuffer
+      blobData = data as ArrayBuffer;
+    } else {
+      // Convert to Uint8Array as fallback
+      const buffer = new ArrayBuffer(0);
+      blobData = new Uint8Array(buffer);
+      console.warn('Unexpected data type from ffmpeg.readFile');
+    }
+
+    // Create blob from output
     const blob = new Blob([blobData], { type: `video/${outputFormat}` });
     console.log('Video composition completed successfully');
-    
+
     return blob;
     
   } catch (error) {
