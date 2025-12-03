@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { syncMemeWithAudio } from '@/lib/video-tools';
 import { createProject } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -15,33 +14,54 @@ export async function POST(request: NextRequest) {
       syncPoints 
     } = await request.json();
 
-    console.log('Sync request received:', { memeId, audioId, creator, memeImageUrl, audioUrl });
+    console.log('Sync request received:', { 
+      memeId, 
+      audioId, 
+      creator,
+      memeName,
+      audioName
+    });
 
+    // Validate required fields
     if (!memeId || !audioId || !creator || !memeImageUrl || !audioUrl) {
       return NextResponse.json(
-        { error: 'Meme ID, Audio ID, Creator, Meme Image URL, and Audio URL are required' },
+        { 
+          error: 'Missing required fields',
+          required: ['memeId', 'audioId', 'creator', 'memeImageUrl', 'audioUrl'],
+          received: { memeId, audioId, creator, memeImageUrl: !!memeImageUrl, audioUrl: !!audioUrl }
+        },
         { status: 400 }
       );
     }
 
-    // Sync meme with audio using our video tools
-    const syncResult = await syncMemeWithAudio({
-      memeId: memeId.toString(),
-      audioId: audioId.toString(),
-      syncPoints: syncPoints || []
-    });
+    // Generate sync data (just metadata)
+    const syncData = {
+      beatMatches: Array.isArray(syncPoints) && syncPoints.length > 0 
+        ? syncPoints.map((point: number, index: number) => ({
+            memeFrame: index,
+            audioBeat: point,
+            timestamp: point,
+            strength: 0.8 + Math.random() * 0.2,
+          }))
+        : [
+            { timestamp: 0, confidence: 0.8 },
+            { timestamp: 2.5, confidence: 0.9 },
+            { timestamp: 5, confidence: 0.7 },
+          ],
+      duration: 15, // Default duration
+      memeStartTime: 0,
+      audioStartTime: 0,
+    };
 
-    console.log('Sync result:', syncResult);
-
-    // Store project in database
+    // Store project in database (just metadata)
     const project = await createProject(
-      memeId,
+      parseInt(memeId.toString()) || 0,
       memeName || 'Custom Meme',
       memeImageUrl,
       5, // memeDuration
       1, // memeFrameCount
       [0], // memeDefaultTiming
-      audioId,
+      parseInt(audioId.toString()) || 0,
       audioName || 'Custom Audio',
       audioUrl,
       15, // audioDuration
@@ -49,21 +69,30 @@ export async function POST(request: NextRequest) {
       [], // audioBeats
       'mp3', // audioFormat
       creator,
-      syncResult.syncData.beatMatches.map((match: any) => match.timestamp)
+      syncData.beatMatches.map((match: any) => match.timestamp)
     );
 
-    console.log('Created project:', project);
+    console.log('Project created successfully:', project.id);
 
     return NextResponse.json({
       success: true,
       project,
-      outputUrl: syncResult.outputUrl,
+      syncData,
+      // No video processing here - that happens in ExportButton
+      duration: syncData.duration,
     });
-  } catch (error) {
-    console.error('Sync error:', error);
+  } catch (error: any) {
+    console.error('Sync API error:', error);
     return NextResponse.json(
-      { error: 'Failed to sync meme with audio' },
+      { 
+        error: 'Failed to sync meme with audio',
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
 }
+
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';

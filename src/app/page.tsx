@@ -15,6 +15,7 @@ import { Wallet, ArrowRight } from 'lucide-react';
 import { MemeTemplate } from '@/types/Meme';
 import { AudioTrack } from '@/types/Audio';
 import { SyncProject } from '@/types/Project';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProjectWithMedia extends SyncProject {
   memeImageUrl: string;
@@ -30,6 +31,7 @@ export default function Home() {
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showTimeout, setShowTimeout] = useState(false);
+  const { toast } = useToast();
 
   // Calculate duration based on selected meme and audio
   const calculateDuration = () => {
@@ -40,13 +42,6 @@ export default function Home() {
 
   // Reset project when wallet disconnects
   useEffect(() => {
-    console.log('Home page wagmi state:', {
-      isConnected,
-      address,
-      isConnecting,
-      isDisconnected,
-      status
-    });
 
     if (isConnecting) {
       const timer = setTimeout(() => {
@@ -62,6 +57,7 @@ export default function Home() {
       setSelectedMeme(null);
       setSelectedAudio(null);
     }
+
   }, [isConnected, , address, isConnecting, isDisconnected, status]);
 
   const handleMemeSelect = (meme: MemeTemplate) => {
@@ -101,19 +97,30 @@ export default function Home() {
       console.log('Sync result from API:', syncResult);
       
       if (syncResult.success && syncResult.project) {
-        // Create a project object that includes the media URLs
+        // Just store the project metadata (no video processing)
         const projectWithMedia = {
           ...syncResult.project,
-          memeImageUrl: selectedMeme.imageUrl, // Add the meme URL
-          audioUrl: selectedAudio.url, // Add the audio URL
+          memeImageUrl: selectedMeme.imageUrl,
+          audioUrl: selectedAudio.url,
+          // No videoUrl yet - ExportButton will create it
         };
         
         setCurrentProject(projectWithMedia);
+        
+        toast({
+          title: 'Project Synced!',
+          description: 'Your meme and audio have been synced. Click Export to create the video.',
+        });
       } else {
         throw new Error('Sync completed but no project returned');
       }
     } catch (error) {
       console.error('Sync failed:', error);
+      toast({
+        title: 'Sync Failed',
+        description: error instanceof Error ? error.message : 'Failed to sync meme with audio',
+        variant: 'destructive',
+      });
     } finally {
       setIsSyncing(false);
     }

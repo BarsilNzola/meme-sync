@@ -1,26 +1,50 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Square, Volume2, VolumeX } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Download, Video } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { SyncProject } from '@/types/Project';
 
 interface BeatSyncPlayerProps {
-  project: SyncProject;
+  project: SyncProject & { 
+    videoUrl?: string;
+    memeImageUrl?: string;
+    audioUrl?: string;
+  };
   audioUrl: string;
   memeUrl: string;
   duration: number;
 }
 
-export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSyncPlayerProps) {
+export default function BeatSyncPlayer({ 
+  project, 
+  audioUrl: propAudioUrl, 
+  memeUrl: propMemeUrl, 
+  duration 
+}: BeatSyncPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [hasVideo, setHasVideo] = useState(false);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  
+  // Use props or fallback to project data
+  const memeUrl = propMemeUrl || project.memeImageUrl || '';
+  const audioUrl = propAudioUrl || project.audioUrl || '';
+  const videoUrl = project.outputUri || project.videoUrl || '';
+
+  useEffect(() => {
+    // Check if project has an export URL from database
+    if (project.outputUri) {
+      setHasVideo(true);
+    }
+  }, [project.outputUri]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -51,8 +75,39 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
     }
   }, [audioUrl]);
 
+  // Video event handlers
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      
+      const updateVideoTime = () => {
+        setCurrentTime(video.currentTime);
+      };
+      
+      const handleVideoEnd = () => {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      };
+
+      video.addEventListener('timeupdate', updateVideoTime);
+      video.addEventListener('ended', handleVideoEnd);
+
+      return () => {
+        video.removeEventListener('timeupdate', updateVideoTime);
+        video.removeEventListener('ended', handleVideoEnd);
+      };
+    }
+  }, [hasVideo]);
+
   const handlePlayPause = async () => {
-    if (audioRef.current) {
+    if (hasVideo && videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        await videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    } else if (audioRef.current) {
       try {
         if (isPlaying) {
           audioRef.current.pause();
@@ -73,20 +128,46 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
     if (audioRef.current) {
       audioRef.current.volume = newVolume / 100;
     }
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume / 100;
+    }
   };
 
   const handleMuteToggle = () => {
     if (audioRef.current) {
       audioRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
     }
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+    }
+    setIsMuted(!isMuted);
   };
 
   const handleSeek = (value: number[]) => {
     const newTime = value[0];
     setCurrentTime(newTime);
-    if (audioRef.current) {
+    if (hasVideo && videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    } else if (audioRef.current) {
       audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const handleDownload = () => {
+    if (videoUrl) {
+      const link = document.createElement('a');
+      link.href = videoUrl;
+      link.download = `memesync-${project.id}-${Date.now()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (audioUrl) {
+      const link = document.createElement('a');
+      link.href = audioUrl;
+      link.download = `audio-${project.id}.mp3`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -102,37 +183,61 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-foreground">Preview</CardTitle>
         <CardDescription className="text-muted-foreground">
-          Watch your meme sync with the audio beats in real-time
+          {hasVideo 
+            ? 'Watch your synced video' 
+            : 'Preview your meme with audio beats'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Video Preview */}
-        <div className="aspect-video bg-gradient-to-br from-purple-600 to-blue-700 rounded-lg flex items-center justify-center relative overflow-hidden border-2 border-border">
-          <div className="text-white text-center">
-            <div className="text-2xl font-bold mb-2">Meme Preview</div>
-            <div className="text-sm opacity-80">Synced with audio beats</div>
-          </div>
-          
-          {/* Beat Indicators */}
-          {syncPoints.map((timestamp, index) => {
-            const beatProgress = (timestamp / actualDuration) * 100;
-            const isActive = currentTime >= timestamp - 0.1 && currentTime <= timestamp + 0.1;
-            
-            return (
-              <div
-                key={index}
-                className={`absolute top-0 bottom-0 w-1 transition-all duration-100 ${
-                  isActive ? 'bg-yellow-400 shadow-lg shadow-yellow-400' : 'bg-white bg-opacity-30'
-                }`}
-                style={{ left: `${beatProgress}%` }}
+        {/* Video/Image Preview */}
+        <div className="aspect-video bg-gradient-to-br from-purple-900 to-blue-900 rounded-lg flex items-center justify-center relative overflow-hidden border-2 border-border">
+          {hasVideo ? (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="w-full h-full object-contain"
+              poster={memeUrl}
+              preload="metadata"
+              controls={false}
+            />
+          ) : (
+            <>
+              <img
+                src={memeUrl}
+                alt="Meme"
+                className="w-full h-full object-contain p-4"
               />
-            );
-          })}
+              
+              {/* Beat Indicators */}
+              {syncPoints.map((timestamp, index) => {
+                const beatProgress = (timestamp / actualDuration) * 100;
+                const isActive = currentTime >= timestamp - 0.1 && currentTime <= timestamp + 0.1;
+                
+                return (
+                  <div
+                    key={index}
+                    className={`absolute top-0 bottom-0 w-1 transition-all duration-100 ${
+                      isActive ? 'bg-yellow-400 shadow-lg shadow-yellow-400' : 'bg-white bg-opacity-30'
+                    }`}
+                    style={{ left: `${beatProgress}%` }}
+                  />
+                );
+              })}
+            </>
+          )}
+          
+          {/* Video available badge */}
+          {hasVideo && (
+            <div className="absolute top-2 left-2 bg-green-600 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+              <Video className="w-3 h-3" />
+              Video Ready
+            </div>
+          )}
           
           {/* Progress Bar */}
-          <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-700">
+          <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-900/70">
             <div 
-              className="h-full bg-primary transition-all duration-100"
+              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-100"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -150,6 +255,7 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
             max={actualDuration}
             step={0.1}
             className="w-full"
+            disabled={!audioUrl && !hasVideo}
           />
         </div>
 
@@ -160,7 +266,7 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
               onClick={handlePlayPause}
               size="lg"
               className="rounded-full w-12 h-12 p-0"
-              disabled={!audioUrl}
+              disabled={(!audioUrl && !hasVideo) || actualDuration === 0}
             >
               {isPlaying ? (
                 <Square className="w-5 h-5" />
@@ -175,7 +281,7 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
                 size="icon"
                 onClick={handleMuteToggle}
                 className="w-8 h-8"
-                disabled={!audioUrl}
+                disabled={!audioUrl && !hasVideo}
               >
                 {isMuted ? (
                   <VolumeX className="w-4 h-4" />
@@ -189,13 +295,27 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
                 max={100}
                 step={1}
                 className="w-20"
-                disabled={!audioUrl}
+                disabled={!audioUrl && !hasVideo}
               />
             </div>
           </div>
 
-          <div className="text-sm text-muted-foreground">
-            {syncPoints.length} sync points
+          <div className="flex items-center space-x-3">
+            {videoUrl && (
+              <Button
+                onClick={handleDownload}
+                size="sm"
+                className="gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <Download className="w-4 h-4" />
+                Download Video
+              </Button>
+            )}
+            
+            <div className="text-sm text-muted-foreground text-right">
+              <div>{syncPoints.length} sync points</div>
+              {hasVideo && <div className="text-green-400">✓ Video Generated</div>}
+            </div>
           </div>
         </div>
 
@@ -217,18 +337,22 @@ export default function BeatSyncPlayer({ project, audioUrl, duration }: BeatSync
           </div>
         </div>
 
-        {/* Hidden Audio Element */}
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          preload="metadata"
-          onError={(e) => console.error('Audio loading error:', e)}
-        />
+        {/* Hidden Audio Element (for audio-only mode) */}
+        {!hasVideo && audioUrl && (
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            preload="metadata"
+            onError={(e) => console.error('Audio loading error:', e)}
+          />
+        )}
         
-        {/* Debug info */}
+        {/* Debug info (development only) */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="text-xs text-muted-foreground">
-            Audio URL: {audioUrl ? 'Loaded' : 'Missing'}
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>Meme URL: {memeUrl ? 'Loaded' : 'Missing'}</div>
+            <div>Audio URL: {audioUrl ? 'Loaded' : 'Missing'}</div>
+            <div>Video URL: {videoUrl ? 'Loaded' : 'Not generated'}</div>
           </div>
         )}
       </CardContent>
