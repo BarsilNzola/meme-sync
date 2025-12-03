@@ -18,13 +18,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-        <Web3Provider>
-          {children}
-          <ClientOnly>
+        <ClientOnly>
+          <Web3Provider>
+            {children}
             <NetworkSwitch />
-          </ClientOnly>
-          <Toaster />
-        </Web3Provider>
+            <Toaster />
+          </Web3Provider>
+        </ClientOnly>
       </body>
     </html>
   )

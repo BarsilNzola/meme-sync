@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -27,6 +28,11 @@ export default function Home() {
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Calculate duration based on selected meme and audio
   const calculateDuration = () => {
@@ -112,6 +118,26 @@ export default function Home() {
   const handleProjectUpdate = (updatedProject: ProjectWithMedia) => {
     setCurrentProject(updatedProject);
   };
+
+  // Don't render anything until mounted
+  if (!mounted) {
+    return (
+      <main className="min-h-screen p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h1 className="text-6xl font-bold gradient-text mb-4">
+                MemeSync
+              </h1>
+              <p className="text-xl text-gray-300">
+                Loading...
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!isConnected) {
     return (
