@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
@@ -16,49 +17,44 @@ import { MemeTemplate } from '@/types/Meme';
 import { AudioTrack } from '@/types/Audio';
 import { SyncProject } from '@/types/Project';
 import { useToast } from '@/hooks/use-toast';
+import { videoGenerator } from '@/lib/video-tools';
 
 interface ProjectWithMedia extends SyncProject {
   memeImageUrl: string;
   audioUrl: string;
+  videoUrl?: string;
 }
 
-console.log('Home page loading...');
-
 export default function Home() {
-  const { isConnected, address, isConnecting, isDisconnected, status } = useAccount();
+  const { isConnected, address } = useAccount();
   const [currentProject, setCurrentProject] = useState<ProjectWithMedia | null>(null);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showTimeout, setShowTimeout] = useState(false);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  
   const { toast } = useToast();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Calculate duration based on selected meme and audio
   const calculateDuration = () => {
     if (!selectedMeme || !selectedAudio) return 0;
-    // Use the longer duration between meme and audio
     return Math.max(selectedMeme.duration, selectedAudio.duration);
   };
 
   // Reset project when wallet disconnects
   useEffect(() => {
-
-    if (isConnecting) {
-      const timer = setTimeout(() => {
-        setShowTimeout(true);
-      }, 5000); // Show timeout message after 5 seconds
-      return () => clearTimeout(timer);
-    } else {
-      setShowTimeout(false);
-    }
-
     if (!isConnected) {
       setCurrentProject(null);
       setSelectedMeme(null);
       setSelectedAudio(null);
     }
-
-  }, [isConnected, , address, isConnecting, isDisconnected, status]);
+  }, [isConnected]);
 
   const handleMemeSelect = (meme: MemeTemplate) => {
     setSelectedMeme(meme);
@@ -97,20 +93,69 @@ export default function Home() {
       console.log('Sync result from API:', syncResult);
       
       if (syncResult.success && syncResult.project) {
-        // Just store the project metadata (no video processing)
+        // Create project object with media URLs
         const projectWithMedia = {
           ...syncResult.project,
           memeImageUrl: selectedMeme.imageUrl,
           audioUrl: selectedAudio.url,
-          // No videoUrl yet - ExportButton will create it
         };
         
         setCurrentProject(projectWithMedia);
         
         toast({
           title: 'Project Synced!',
-          description: 'Your meme and audio have been synced. Click Export to create the video.',
+          description: 'Generating video preview...',
         });
+        
+        // Start video generation
+        setIsGeneratingVideo(true);
+        setVideoProgress(0);
+        
+        // Setup progress listener
+        const unsubscribe = videoGenerator.onProgress(setVideoProgress);
+        
+        const videoResult = await videoGenerator.generateVideo({
+          memeUrl: selectedMeme.imageUrl,
+          audioUrl: selectedAudio.url,
+          projectId: syncResult.project.id,
+          syncPoints: syncResult.syncData.beatMatches.map((match: any) => match.timestamp),
+          duration: syncResult.syncData.duration,
+          quality: 'medium',
+        });
+        
+        unsubscribe();
+        setIsGeneratingVideo(false);
+        
+        if (videoResult.success && videoResult.videoUrl) {
+          // Update project with video URL in database
+          const updateResponse = await fetch('/api/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: syncResult.project.id,
+              videoUrl: videoResult.videoUrl,
+            }),
+          });
+          
+          let updatedProject = projectWithMedia;
+          if (updateResponse.ok) {
+            updatedProject = await updateResponse.json();
+          }
+          
+          // Update local state with video URL
+          setCurrentProject({
+            ...updatedProject,
+            videoUrl: videoResult.videoUrl,
+            outputUri: videoResult.videoUrl,
+          });
+          
+          toast({
+            title: 'Video Ready!',
+            description: 'Your synced video is ready to preview and register.',
+          });
+        } else {
+          throw new Error(videoResult.error || 'Failed to generate video');
+        }
       } else {
         throw new Error('Sync completed but no project returned');
       }
@@ -123,6 +168,7 @@ export default function Home() {
       });
     } finally {
       setIsSyncing(false);
+      setIsGeneratingVideo(false);
     }
   };
   
@@ -141,7 +187,7 @@ export default function Home() {
   };
 
   // Don't render anything until mounted
-  if (isConnecting) {
+  if (!mounted) {
     return (
       <main className="min-h-screen p-8">
         <div className="max-w-7xl mx-auto">
@@ -234,6 +280,38 @@ export default function Home() {
           <WalletConnect />
         </div>
 
+        {/* Video Generation Progress */}
+        {isGeneratingVideo && (
+          <Card className="bg-background/50 backdrop-blur-sm border-border/50 mb-8">
+            <CardHeader>
+              <CardTitle className="text-2xl font-bold text-foreground">
+                Generating Video
+              </CardTitle>
+              <CardDescription>
+                Creating your synced meme video...
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">Processing video...</div>
+                  <div className="text-sm font-medium">{videoProgress}%</div>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-300"
+                    style={{ width: `${videoProgress}%` }}
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Video processing happens in your browser using FFmpeg WebAssembly.
+                  This may take a moment depending on video length.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Workflow */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Left Column - Inputs */}
@@ -270,14 +348,14 @@ export default function Home() {
                 <CardContent>
                   <Button
                     onClick={handleSync}
-                    disabled={isSyncing}
+                    disabled={isSyncing || isGeneratingVideo}
                     size="lg"
                     className="w-full gap-2 bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700"
                   >
-                    {isSyncing ? (
+                    {isSyncing || isGeneratingVideo ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Syncing...
+                        {isGeneratingVideo ? 'Generating Video...' : 'Syncing...'}
                       </>
                     ) : (
                       <>
@@ -326,12 +404,16 @@ export default function Home() {
                 </Card>
 
                 <Card className="bg-background/50 backdrop-blur-sm border-border/50">
-                  <CardContent className="flex justify-between items-center pt-6">
-                    <ExportButton 
+                  <CardContent className="flex flex-col lg:flex-row justify-between items-center gap-6 pt-6">
+                    <div className="w-full lg:w-auto">
+                      <ExportButton 
                         project={currentProject} 
                         onExportComplete={handleProjectUpdate} 
-                    />
-                    <IPRegistrationBadge project={currentProject} />
+                      />
+                    </div>
+                    <div className="w-full lg:w-auto">
+                      <IPRegistrationBadge project={currentProject} />
+                    </div>
                   </CardContent>
                 </Card>
               </>
@@ -358,7 +440,12 @@ export default function Home() {
           <Card className={`bg-background/30 ${currentProject ? 'border-green-500' : ''}`}>
             <CardContent className="p-4">
               <div className="text-foreground font-semibold">Project Status</div>
-              <div className="text-muted-foreground text-sm">{currentProject ? currentProject.status : 'Not Started'}</div>
+              <div className="text-muted-foreground text-sm">
+                {isGeneratingVideo ? 'Generating Video...' : currentProject?.status || 'Not Started'}
+              </div>
+              {currentProject?.videoUrl && (
+                <div className="text-xs text-green-400 mt-1">✓ Video Ready</div>
+              )}
             </CardContent>
           </Card>
         </div>

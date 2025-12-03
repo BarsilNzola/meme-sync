@@ -14,6 +14,7 @@ import { updateProjectIPRegistration } from '@/lib/db';
 interface ProjectWithMedia extends SyncProject {
   memeImageUrl: string;
   audioUrl: string;
+  videoUrl?: string;
 }
 
 interface IPRegistrationBadgeProps {
@@ -30,12 +31,10 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
   const [ipAssetId, setIpAssetId] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('IPRegistrationBadge - Project:', project);
-    console.log('IPRegistrationBadge - outputUri:', project.outputUri);
-    console.log('IPRegistrationBadge - Can register:', !!project.outputUri);
-  }, [project]);
+  // Use videoUrl if available, otherwise fallback to outputUri
+  const videoUrl = project.videoUrl || project.outputUri;
+
+  const canRegister = !!videoUrl;
 
   const handleRegister = async () => {
     if (!address || !walletClient) {
@@ -47,34 +46,34 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       return;
     }
   
-    // CHECK NETWORK FIRST
+    // Check network
     const storyAeneidChainId = 1315;
-  if (chainId !== storyAeneidChainId) {
-    toast({
-      title: 'Wrong Network',
-      description: `Please switch to Story Aeneid (Chain ID: ${storyAeneidChainId}) before registering.`,
-      variant: 'destructive',
-      duration: 10000,
-    });
-    return;
-  }
+    if (chainId !== storyAeneidChainId) {
+      toast({
+        title: 'Wrong Network',
+        description: `Please switch to Story Aeneid (Chain ID: ${storyAeneidChainId}) before registering.`,
+        variant: 'destructive',
+        duration: 10000,
+      });
+      return;
+    }
 
     setIsRegistering(true);
     setError(null);
 
     try {
-      // First, ensure project is exported and has output
-      if (!project.outputUri) {
-        throw new Error('Project must be exported before IP registration');
+      // Ensure video is available
+      if (!canRegister) {
+        throw new Error('Video must be generated before IP registration');
       }
 
-      // Prepare metadata for IP registration
+      // Prepare metadata
       const metadata = {
         name: project.projectName,
         description: `MemeSync creation: ${project.projectName}`,
         image: project.memeImageUrl,
         audio: project.audioUrl,
-        animation_url: project.outputUri,
+        animation_url: videoUrl,
         attributes: [
           {
             trait_type: "Duration",
@@ -94,7 +93,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
           },
           {
             trait_type: "Project ID",
-            value: project.id.toString() // Convert to string
+            value: project.id.toString()
           }
         ],
         external_url: "https://memesync.xyz",
@@ -106,7 +105,6 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
         }
       };
 
-      // Upload metadata to IPFS
       toast({
         title: 'Uploading Metadata',
         description: 'Preparing metadata for IPFS storage...',
@@ -114,7 +112,6 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
       const metadataUri = await uploadMetadataToIPFS(metadata);
 
-      // Register directly with Story Protocol
       toast({
         title: 'Registering IP Asset',
         description: 'Creating your IP asset on Story Protocol...',
@@ -122,7 +119,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
       console.log('Starting Story Protocol registration...', {
         projectId: project.id,
-        outputUri: project.outputUri,
+        videoUrl,
         metadataUri
       });
 
@@ -130,20 +127,19 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
         projectId: project.id.toString(),
         projectName: project.projectName,
         memeId: project.memeId.toString(),
-        outputUri: project.outputUri,
+        outputUri: videoUrl,
         metadataUri: metadataUri,
         walletClient,
       });
 
       console.log('Story Protocol registration successful:', registrationResult);
 
-      // Update project in database with IP registration details
+      // Update project in database
       try {
-        // Convert project.id to string to match the function signature
         await updateProjectIPRegistration(project.id.toString(), registrationResult.txHash);
         console.log('Project updated in database with IP registration');
       } catch (dbError) {
-        console.warn('Failed to update project in database, but IP registration was successful:', dbError);
+        console.warn('Failed to update project in database:', dbError);
       }
 
       setIpAssetId(registrationResult.ipAssetId);
@@ -179,9 +175,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('IPFS upload failed:', errorText);
-        throw new Error(`IPFS upload failed: ${response.status} ${response.statusText}`);
+        throw new Error(`IPFS upload failed: ${response.status}`);
       }
 
       const result = await response.json();
@@ -189,13 +183,13 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
     } catch (error) {
       console.error('IPFS upload error:', error);
       
-      // In development, return a mock URI instead of failing completely
+      // Development fallback
       if (process.env.NODE_ENV === 'development') {
-        console.warn('Using fallback mock IPFS URI due to upload error');
-        return `ipfs://mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        console.warn('Using mock IPFS URI');
+        return `ipfs://mock-${Date.now()}`;
       }
       
-      throw new Error('Failed to upload metadata to IPFS');
+      throw error;
     }
   };
 
@@ -334,7 +328,7 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
         <Button
           onClick={handleRegister}
-          disabled={isRegistering || !project.outputUri}
+          disabled={isRegistering || !canRegister}
           className="w-full gap-2 bg-purple-600 hover:bg-purple-700"
           size="lg"
         >
