@@ -21,8 +21,10 @@ interface ProjectWithMedia extends SyncProject {
   audioUrl: string;
 }
 
+console.log('Home page loading...');
+
 export default function Home() {
-  const { isConnected, address, isConnecting } = useAccount();
+  const { isConnected, address, isConnecting, isDisconnected, status } = useAccount();
   const [currentProject, setCurrentProject] = useState<ProjectWithMedia | null>(null);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
@@ -37,12 +39,20 @@ export default function Home() {
 
   // Reset project when wallet disconnects
   useEffect(() => {
+    console.log('Home page wagmi state:', {
+      isConnected,
+      address,
+      isConnecting,
+      isDisconnected,
+      status
+    });
+
     if (!isConnected) {
       setCurrentProject(null);
       setSelectedMeme(null);
       setSelectedAudio(null);
     }
-  }, [isConnected]);
+  }, [isConnected, , address, isConnecting, isDisconnected, status]);
 
   const handleMemeSelect = (meme: MemeTemplate) => {
     setSelectedMeme(meme);
