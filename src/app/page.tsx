@@ -23,16 +23,11 @@ interface ProjectWithMedia extends SyncProject {
 }
 
 export default function Home() {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, isConnecting } = useAccount();
   const [currentProject, setCurrentProject] = useState<ProjectWithMedia | null>(null);
   const [selectedMeme, setSelectedMeme] = useState<MemeTemplate | null>(null);
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Calculate duration based on selected meme and audio
   const calculateDuration = () => {
@@ -120,7 +115,7 @@ export default function Home() {
   };
 
   // Don't render anything until mounted
-  if (!mounted) {
+  if (isConnecting) {
     return (
       <main className="min-h-screen p-8">
         <div className="max-w-7xl mx-auto">
