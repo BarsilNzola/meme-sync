@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Sync memes with AI-generated audio and register on Story Protocol",
   "scripts": {
-    "dev": "next dev",
-    "build": "TURBOPACK=0 next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint"
   },
