@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, XCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,11 +30,36 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
   const [error, setError] = useState<string | null>(null);
   const [ipAssetId, setIpAssetId] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<'assetId' | 'txHash' | null>(null);
 
   // Use videoUrl if available, otherwise fallback to outputUri
   const videoUrl = project.videoUrl || project.outputUri;
 
   const canRegister = !!videoUrl;
+
+  const copyToClipboard = async (text: string, field: 'assetId' | 'txHash') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast({
+        title: 'Copied!',
+        description: `${field === 'assetId' ? 'Asset ID' : 'Transaction hash'} copied to clipboard`,
+      });
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      toast({
+        title: 'Copy Failed',
+        description: 'Failed to copy to clipboard',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const truncateAddress = (address: string, start = 6, end = 4) => {
+    if (!address) return '';
+    if (address.length <= start + end) return address;
+    return `${address.substring(0, start)}...${address.substring(address.length - end)}`;
+  };
 
   const handleRegister = async () => {
     if (!address || !walletClient) {
@@ -210,41 +235,95 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
     }
   };
 
-  if (ipAssetId) {
+  if (ipAssetId && txHash) {
     return (
       <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
         <CardHeader className="pb-4">
-          <CardTitle className="text-xl md:text-2xl font-bold text-foreground">IP Asset Registered</CardTitle>
-          <CardDescription className="text-muted-foreground text-sm md:text-base">
-            Your meme has been successfully registered on Story Protocol
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-xl sm:text-2xl font-bold text-foreground flex flex-wrap items-center gap-2">
+                IP Asset Registered
+                <Badge className="bg-green-500 hover:bg-green-600 text-xs">Success</Badge>
+              </CardTitle>
+              <CardDescription className="text-muted-foreground text-sm sm:text-base">
+                Your meme has been successfully registered on Story Protocol
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2 text-green-400">
-            <CheckCircle className="w-5 h-5" />
-            <span className="font-medium">Registered on Story Protocol</span>
+          <div className="flex items-center space-x-2 text-green-400 bg-green-500/10 p-3 rounded-lg">
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">Registered on Story Protocol</span>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="break-all">
-              <div className="text-muted-foreground">Asset ID</div>
-              <div className="font-mono text-xs md:text-sm truncate">{ipAssetId}</div>
+          {/* Responsive asset details grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Asset ID */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-muted-foreground font-medium text-sm">Asset ID</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => copyToClipboard(ipAssetId, 'assetId')}
+                >
+                  {copiedField === 'assetId' ? (
+                    <Check className="w-3 h-3" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </Button>
+              </div>
+              <div className="font-mono text-xs sm:text-sm p-3 bg-black/20 rounded-md border border-border/50 break-all">
+                {/* Show truncated on mobile, full on larger screens */}
+                <div className="block sm:hidden">{truncateAddress(ipAssetId)}</div>
+                <div className="hidden sm:block">{ipAssetId}</div>
+              </div>
             </div>
-            <div className="break-all">
-              <div className="text-muted-foreground">Transaction</div>
-              <div className="font-mono text-xs md:text-sm truncate">{txHash}</div>
+            
+            {/* Transaction Hash */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-muted-foreground font-medium text-sm">Transaction</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => copyToClipboard(txHash, 'txHash')}
+                >
+                  {copiedField === 'txHash' ? (
+                    <Check className="w-3 h-3" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </Button>
+              </div>
+              <div className="font-mono text-xs sm:text-sm p-3 bg-black/20 rounded-md border border-border/50 break-all">
+                {/* Show truncated on mobile, full on larger screens */}
+                <div className="block sm:hidden">{truncateAddress(txHash)}</div>
+                <div className="hidden sm:block">{txHash}</div>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          {/* Responsive action buttons - Stack on mobile, row on larger screens */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
               onClick={() => window.open(`https://testnet.storyprotocol.xyz/ipa/${ipAssetId}`, '_blank')}
-              className="gap-2 flex-1 justify-center"
+              className="gap-2 flex-1 justify-center bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
             >
               <ExternalLink className="w-4 h-4" />
-              View on Story
+              <span className="hidden sm:inline">View on Story</span>
+              <span className="sm:hidden">Story Protocol</span>
             </Button>
             <Button
               variant="outline"
@@ -253,7 +332,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               className="gap-2 flex-1 justify-center"
             >
               <ExternalLink className="w-4 h-4" />
-              View on Etherscan
+              <span className="hidden sm:inline">View on Etherscan</span>
+              <span className="sm:hidden">Etherscan</span>
             </Button>
           </div>
         </CardContent>
@@ -266,10 +346,14 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
       <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
         <CardContent className="pt-6">
           <div className="flex items-center space-x-2 text-red-400">
-            <XCircle className="w-5 h-5" />
-            <span className="font-medium">Registration Failed</span>
+            <XCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base">Registration Failed</span>
           </div>
-          <p className="text-sm text-muted-foreground mt-2 break-words">{error}</p>
+          {/* Truncate long error messages on mobile */}
+          <p className="text-sm text-muted-foreground mt-2 break-words bg-red-500/10 p-3 rounded-md">
+            {error.length > 200 && window.innerWidth < 640 ? 
+              `${error.substring(0, 200)}...` : error}
+          </p>
           <div className="flex flex-col sm:flex-row gap-2 mt-4">
             <Button
               onClick={handleRegister}
@@ -278,7 +362,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               variant="outline"
             >
               <Shield className="w-4 h-4" />
-              Try Again
+              <span className="hidden sm:inline">Try Again</span>
+              <span className="sm:hidden">Retry</span>
             </Button>
             <Button
               onClick={handleRefreshProject}
@@ -286,7 +371,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               size="sm"
               className="flex-1 justify-center"
             >
-              Refresh Project
+              <span className="hidden sm:inline">Refresh Project</span>
+              <span className="sm:hidden">Refresh</span>
             </Button>
           </div>
         </CardContent>
@@ -297,19 +383,23 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
   return (
     <Card className="bg-background/50 backdrop-blur-sm border-border/50 w-full">
       <CardHeader className="pb-4">
-        <CardTitle className="text-xl md:text-2xl font-bold text-foreground">Register IP Asset</CardTitle>
-        <CardDescription className="text-muted-foreground text-sm md:text-base">
+        <CardTitle className="text-xl sm:text-2xl font-bold text-foreground flex flex-wrap items-center gap-2">
+          Register IP Asset
+          <Badge variant="secondary" className="text-xs hidden sm:inline">On-Chain</Badge>
+        </CardTitle>
+        <CardDescription className="text-muted-foreground text-sm sm:text-base">
           Register your meme creation as an IP asset on Story Protocol to protect your work
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center space-x-2">
           <Shield className="w-5 h-5 text-primary" />
-          <span className="font-medium">Story Protocol Registration</span>
-          <Badge variant="secondary" className="hidden sm:inline">On-Chain</Badge>
+          <span className="font-medium text-sm sm:text-base">Story Protocol Registration</span>
+          <Badge variant="secondary" className="text-xs sm:hidden">On-Chain</Badge>
         </div>
 
-        <div className="space-y-2 text-sm text-muted-foreground">
+        {/* Responsive feature list - 2 columns on larger screens, 1 column on mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
           <p className="break-words">• Register your meme as a unique IP asset</p>
           <p className="break-words">• Set royalties for future usage</p>
           <p className="break-words">• Protect your creative work on-chain</p>
@@ -320,8 +410,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
         {process.env.NODE_ENV === 'development' && (
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
             <div className="font-semibold text-yellow-800">Debug Info:</div>
-            <div className="break-all">Project ID: {project.id}</div>
-            <div className="break-all">Output URI: {project.outputUri || 'Not set'}</div>
+            <div className="break-all truncate">Project ID: {project.id}</div>
+            <div className="break-all truncate">Output URI: {project.outputUri || 'Not set'}</div>
             <div>Status: {project.status}</div>
           </div>
         )}
@@ -358,7 +448,8 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               size="sm"
               className="w-full"
             >
-              Refresh Project Status
+              <span className="hidden sm:inline">Refresh Project Status</span>
+              <span className="sm:hidden">Refresh Status</span>
             </Button>
           </div>
         )}
