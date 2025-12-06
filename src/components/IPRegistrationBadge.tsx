@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shield, CheckCircle, XCircle, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, ExternalLink, Loader2, Copy, Check, FileText, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,20 +30,21 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
   const [error, setError] = useState<string | null>(null);
   const [ipAssetId, setIpAssetId] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<'assetId' | 'txHash' | null>(null);
+  const [licenseTxHash, setLicenseTxHash] = useState<string | null>(null);
+  const [licenseTermsId, setLicenseTermsId] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<'assetId' | 'txHash' | 'licenseTxHash' | null>(null);
 
   // Use videoUrl if available, otherwise fallback to outputUri
   const videoUrl = project.videoUrl || project.outputUri;
-
   const canRegister = !!videoUrl;
 
-  const copyToClipboard = async (text: string, field: 'assetId' | 'txHash') => {
+  const copyToClipboard = async (text: string, field: 'assetId' | 'txHash' | 'licenseTxHash') => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
       toast({
         title: 'Copied!',
-        description: `${field === 'assetId' ? 'Asset ID' : 'Transaction hash'} copied to clipboard`,
+        description: `${field === 'assetId' ? 'Asset ID' : field === 'txHash' ? 'Registration hash' : 'License hash'} copied to clipboard`,
       });
       setTimeout(() => setCopiedField(null), 2000);
     } catch (err) {
@@ -169,11 +170,21 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
 
       setIpAssetId(registrationResult.ipAssetId);
       setTxHash(registrationResult.txHash);
+      setLicenseTxHash(registrationResult.licenseTxHash || null);
+      setLicenseTermsId(registrationResult.licenseTermsIds[0] || null);
       
-      toast({
-        title: 'IP Asset Registered!',
-        description: 'Your meme has been successfully registered on Story Protocol.',
-      });
+      if (registrationResult.licenseTxHash) {
+        toast({
+          title: 'IP Asset Registered & Licensed!',
+          description: 'Your meme has been registered with non-commercial social remixing license.',
+        });
+      } else {
+        toast({
+          title: 'IP Asset Registered!',
+          description: 'Your meme has been registered. License attachment failed or was skipped.',
+          variant: 'default',
+        });
+      }
 
     } catch (error) {
       console.error('IP registration failed:', error);
@@ -249,17 +260,40 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               <CardTitle className="text-xl sm:text-2xl font-bold text-foreground flex flex-wrap items-center gap-2">
                 IP Asset Registered
                 <Badge className="bg-green-500 hover:bg-green-600 text-xs">Success</Badge>
+                {licenseTxHash && (
+                  <Badge className="bg-blue-500 hover:bg-blue-600 text-xs flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    Licensed
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription className="text-muted-foreground text-sm sm:text-base">
-                Your meme has been successfully registered on Story Protocol
+                {licenseTxHash 
+                  ? 'Your meme has been registered with non-commercial social remixing license'
+                  : 'Your meme has been successfully registered on Story Protocol'}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2 text-green-400 bg-green-500/10 p-3 rounded-lg">
-            <CheckCircle className="w-5 h-5 flex-shrink-0" />
-            <span className="font-medium text-sm sm:text-base">Registered on Story Protocol</span>
+          {/* Success Indicators */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2 text-green-400 bg-green-500/10 p-3 rounded-lg">
+              <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium text-sm sm:text-base">Registered on Story Protocol</span>
+            </div>
+            
+            {licenseTxHash && (
+              <div className="flex items-center space-x-2 text-blue-400 bg-blue-500/10 p-3 rounded-lg">
+                <FileText className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <span className="font-medium text-sm sm:text-base">Licensed for Social Remixing</span>
+                  <p className="text-xs text-blue-300 mt-1">
+                    Others can remix your meme for non-commercial use with attribution
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Responsive asset details grid */}
@@ -288,10 +322,10 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               </div>
             </div>
             
-            {/* Transaction Hash */}
+            {/* Registration Transaction */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="text-muted-foreground font-medium text-sm">Transaction</div>
+                <div className="text-muted-foreground font-medium text-sm">Registration</div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -311,6 +345,42 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
                 <div className="hidden sm:block">{txHash}</div>
               </div>
             </div>
+            
+            {/* License Transaction (if exists) */}
+            {licenseTxHash && (
+              <>
+                <div className="space-y-2 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-muted-foreground font-medium text-sm flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      License Transaction
+                      {licenseTermsId && (
+                        <Badge variant="outline" className="text-xs">
+                          Terms ID: {licenseTermsId}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => copyToClipboard(licenseTxHash, 'licenseTxHash')}
+                    >
+                      {copiedField === 'licenseTxHash' ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="font-mono text-xs sm:text-sm p-3 bg-black/20 rounded-md border border-blue-500/30 break-all">
+                    {/* Show truncated on mobile, full on larger screens */}
+                    <div className="block sm:hidden">{truncateAddress(licenseTxHash)}</div>
+                    <div className="hidden sm:block">{licenseTxHash}</div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Responsive action buttons - Stack on mobile, row on larger screens */}
@@ -332,9 +402,21 @@ export default function IPRegistrationBadge({ project }: IPRegistrationBadgeProp
               className="gap-2 flex-1 justify-center"
             >
               <ExternalLink className="w-4 h-4" />
-              <span className="hidden sm:inline">View on Etherscan</span>
-              <span className="sm:hidden">Etherscan</span>
+              <span className="hidden sm:inline">Registration Tx</span>
+              <span className="sm:hidden">Registration</span>
             </Button>
+            {licenseTxHash && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`https://sepolia.etherscan.io/tx/${licenseTxHash}`, '_blank')}
+                className="gap-2 flex-1 justify-center border-blue-500 text-blue-500 hover:bg-blue-500/10"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">License Tx</span>
+                <span className="sm:hidden">License</span>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

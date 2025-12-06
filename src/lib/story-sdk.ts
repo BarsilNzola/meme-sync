@@ -18,6 +18,7 @@ interface RegistrationResult {
   ipAssetId: string;
   txHash: string;
   licenseTermsIds: string[];
+  licenseTxHash?: string;
   spgNftContract?: string;
 }
 
@@ -185,13 +186,13 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
     });
 
     const hash = await walletClient.writeContract(request);
-    console.log('Transaction sent, hash:', hash);
+    console.log('Registration transaction sent, hash:', hash);
     
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    console.log('Transaction confirmed:', receipt.status);
+    console.log('Registration transaction confirmed:', receipt.status);
     
     if (receipt.status !== 'success') {
-      throw new Error('Transaction failed');
+      throw new Error('Registration transaction failed');
     }
     
     // Extract IP ID from logs or calculate it
@@ -276,14 +277,34 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
 
     console.log('IP Asset registered successfully!');
     console.log('IP ID:', ipId);
-    console.log('Transaction Hash:', hash);
+    
+    // Now attach license terms
+    console.log('Attaching license terms...');
+    let licenseTxHash: string | undefined;
+    let licenseTermsIds: string[] = [];
+    
+    try {
+      const licenseResult = await attachLicenseTerms(ipId, walletClient);
+      licenseTxHash = licenseResult.txHash;
+      licenseTermsIds = [licenseResult.licenseTermsId];
+      
+      console.log('License terms attached successfully!');
+      console.log('License Transaction Hash:', licenseTxHash);
+      console.log('License Terms ID:', licenseResult.licenseTermsId);
+    } catch (licenseError: any) {
+      console.warn('Failed to attach license terms:', licenseError);
+      // Don't fail the entire registration if licensing fails
+      // The IP asset is still registered successfully
+    }
+
     console.log('View on explorer:', `https://aeneid-explorer.storyprotocol.xyz/ipa/${ipId}`);
 
     return {
       success: true,
       ipAssetId: ipId,
       txHash: hash,
-      licenseTermsIds: [], // No license terms attached initially
+      licenseTermsIds,
+      licenseTxHash,
       spgNftContract: SPG_CONTRACT_ADDRESS,
     };
 
@@ -315,6 +336,67 @@ export async function registerIPAsset(options: IPRegistrationOptions): Promise<R
       throw new Error(`Registration failed: ${error.message || 'Unknown error'}\n\nCheck browser console for more details.`);
     }
   }
+}
+
+export async function attachLicenseTerms(
+  ipId: string,
+  walletClient: any
+): Promise<{ success: boolean; licenseTermsId: string; txHash: string }> {
+  
+  const publicClient = createPublicClient({
+    transport: http('https://aeneid.storyrpc.io'),
+  });
+
+  const LICENSE_REGISTRY_ADDRESS = '0x04fbd8a2e56dd85CFD5500A4A4DfA955B9f1dDe6f' as `0x${string}`;
+  
+  // ABI for attachLicenseTerms
+  const LICENSE_REGISTRY_ABI = [
+    {
+      name: 'attachLicenseTerms',
+      type: 'function',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'ipId', type: 'address' },
+        { name: 'licenseTemplate', type: 'address' },
+        { name: 'licenseTermsId', type: 'uint256' },
+      ],
+      outputs: [],
+    },
+  ] as const;
+
+  // For non-commercial social remixing (most permissive for memes)
+  const LICENSE_TEMPLATE = '0x2E896b0b2Fdb7457499B56AAaA4AE55BCB4Cd316' as `0x${string}`;
+  const LICENSE_TERMS_ID = BigInt(1); // ID for non-commercial social remixing
+
+  console.log('Attaching license terms...', {
+    ipId,
+    licenseTemplate: LICENSE_TEMPLATE,
+    licenseTermsId: LICENSE_TERMS_ID.toString(),
+  });
+
+  const { request } = await publicClient.simulateContract({
+    address: LICENSE_REGISTRY_ADDRESS,
+    abi: LICENSE_REGISTRY_ABI,
+    functionName: 'attachLicenseTerms',
+    args: [
+      ipId as `0x${string}`,
+      LICENSE_TEMPLATE,
+      LICENSE_TERMS_ID,
+    ],
+    account: walletClient.account,
+  });
+
+  const hash = await walletClient.writeContract(request);
+  console.log('License transaction sent, hash:', hash);
+  
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  console.log('License transaction confirmed:', receipt.status);
+
+  return {
+    success: receipt.status === 'success',
+    licenseTermsId: LICENSE_TERMS_ID.toString(),
+    txHash: hash,
+  };
 }
 
 async function generateHash(data: string): Promise<string> {
